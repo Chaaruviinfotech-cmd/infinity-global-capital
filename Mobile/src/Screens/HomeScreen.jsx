@@ -60,10 +60,28 @@ const HomeScreen = ({ navigation }) => {
         }
     }, [user?.kyc_requested, navigation]);
 
-    if (loading || !dashboardData) {
+    if (loading) {
         return (
             <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
                 <Loader visible={true} text="Connecting to Exchange..." overlay={true} />
+            </SafeAreaView>
+        );
+    }
+
+    if (!dashboardData) {
+        return (
+            <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+                <Ionicons name="cloud-offline-outline" size={48} color="#F87171" />
+                <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 16 }}>Unable to Load Dashboard</Text>
+                <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', marginTop: 8, marginBottom: 20 }}>
+                    Server error occurred while loading dashboard. Please check server or retry.
+                </Text>
+                <TouchableOpacity 
+                    onPress={() => { setLoading(true); fetchDashboardData(); }}
+                    style={{ backgroundColor: '#0284C7', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+                >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Retry</Text>
+                </TouchableOpacity>
             </SafeAreaView>
         );
     }
