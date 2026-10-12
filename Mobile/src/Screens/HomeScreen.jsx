@@ -86,7 +86,16 @@ const HomeScreen = ({ navigation }) => {
         );
     }
 
-    const { portfolio, market_indices } = dashboardData;
+    const portfolio = dashboardData?.portfolio || {};
+    const market_indices = Array.isArray(dashboardData?.market_indices) ? dashboardData.market_indices : [];
+    const top_gainers = Array.isArray(dashboardData?.top_gainers) ? dashboardData.top_gainers : [];
+
+    const totalPortfolioVal = Number(portfolio?.total_value ?? portfolio?.total_portfolio_value ?? 0);
+    const dayPnl = Number(portfolio?.day_pnl ?? 0);
+    const dayPnlPercent = Number(portfolio?.day_pnl_percent ?? 0);
+    const investedAmount = Number(portfolio?.invested_amount ?? 0);
+    const availableMargin = Number(portfolio?.available_margin ?? 0);
+    const holdingsCount = portfolio?.holdings_count || 0;
 
     const getInitials = (name) => {
         if (!name) return 'IG';
@@ -212,13 +221,13 @@ const HomeScreen = ({ navigation }) => {
                     </View>
 
                     <Text style={styles.heroAmount}>
-                        ₹{portfolio.total_value.toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                        ₹{totalPortfolioVal.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                     </Text>
 
                     <View style={styles.pnlBadge}>
-                        <Ionicons name="caret-up" size={16} color="#34D399" />
-                        <Text style={styles.pnlText}>
-                            +₹{portfolio.day_pnl.toLocaleString('en-IN')} ({portfolio.day_pnl_percent}%) Today
+                        <Ionicons name={dayPnl >= 0 ? "caret-up" : "caret-down"} size={16} color={dayPnl >= 0 ? "#34D399" : "#F87171"} />
+                        <Text style={[styles.pnlText, dayPnl < 0 && {color: '#F87171'}]}>
+                            {dayPnl >= 0 ? '+' : ''}₹{dayPnl.toLocaleString('en-IN')} ({dayPnlPercent}%) Today
                         </Text>
                     </View>
 
@@ -227,11 +236,11 @@ const HomeScreen = ({ navigation }) => {
                     <View style={styles.heroMetrics}>
                         <View>
                             <Text style={styles.metricSubLabel}>Invested Amount</Text>
-                            <Text style={styles.metricSubVal}>₹{portfolio.invested_amount.toLocaleString('en-IN')}</Text>
+                            <Text style={styles.metricSubVal}>₹{investedAmount.toLocaleString('en-IN')}</Text>
                         </View>
                         <View style={{alignItems: 'flex-end'}}>
                             <Text style={styles.metricSubLabel}>Available Margin</Text>
-                            <Text style={styles.metricSubValGreen}>₹{portfolio.available_margin.toLocaleString('en-IN')}</Text>
+                            <Text style={styles.metricSubValGreen}>₹{availableMargin.toLocaleString('en-IN')}</Text>
                         </View>
                     </View>
                 </View>
@@ -263,7 +272,7 @@ const HomeScreen = ({ navigation }) => {
                         <View style={[styles.gridIconBox, {backgroundColor: 'rgba(59, 130, 246, 0.15)'}]}>
                             <Ionicons name="pie-chart" size={18} color="#60A5FA" />
                         </View>
-                        <Text style={styles.gridVal}>₹{(portfolio.invested_amount / 100000).toFixed(2)}L</Text>
+                        <Text style={styles.gridVal}>₹{(investedAmount / 100000).toFixed(2)}L</Text>
                         <Text style={styles.gridLabel}>Invested</Text>
                     </View>
 
@@ -271,7 +280,9 @@ const HomeScreen = ({ navigation }) => {
                         <View style={[styles.gridIconBox, {backgroundColor: 'rgba(16, 185, 129, 0.15)'}]}>
                             <Ionicons name="flash" size={18} color="#34D399" />
                         </View>
-                        <Text style={[styles.gridVal, {color: '#34D399'}]}>+{portfolio.day_pnl_percent}%</Text>
+                        <Text style={[styles.gridVal, {color: dayPnl >= 0 ? '#34D399' : '#F87171'}]}>
+                            {dayPnl >= 0 ? '+' : ''}{dayPnlPercent}%
+                        </Text>
                         <Text style={styles.gridLabel}>Day P&L</Text>
                     </View>
 
@@ -287,7 +298,7 @@ const HomeScreen = ({ navigation }) => {
                         <View style={[styles.gridIconBox, {backgroundColor: 'rgba(245, 158, 11, 0.15)'}]}>
                             <Ionicons name="layers" size={18} color="#FBBF24" />
                         </View>
-                        <Text style={styles.gridVal}>{portfolio.holdings_count || 16}</Text>
+                        <Text style={styles.gridVal}>{holdingsCount || 16}</Text>
                         <Text style={styles.gridLabel}>Holdings</Text>
                     </View>
                 </View>
@@ -301,7 +312,7 @@ const HomeScreen = ({ navigation }) => {
                 </View>
 
                 <View style={styles.listContainer}>
-                    {(dashboardData.top_gainers || []).map((g, idx) => {
+                    {top_gainers.map((g, idx) => {
                         const colors = ['#38BDF8', '#C084FC', '#34D399', '#FBBF24'];
                         const col = colors[idx % colors.length];
                         return (
