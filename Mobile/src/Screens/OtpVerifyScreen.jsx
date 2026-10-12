@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useDispatch } from 'react-redux';
-import { verifyOtpAction, loginUserAction } from '../Services/Actions/postApis';
+import { verifyOtpAction, registerUserAction } from '../Services/Actions/postApis';
 import Loader from '../Components/Loader';
 import Alert from '../Components/Alert';
 
@@ -17,10 +17,17 @@ const OtpVerifyScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(false);
     
     const [alertVisible, setAlertVisible] = useState(false);
-    const [alertConfig, setAlertConfig] = useState({ type: 'info', title: '', message: '' });
+    const [alertConfig, setAlertConfig] = useState({ 
+        type: 'info', 
+        title: '', 
+        message: '',
+        confirmText: 'OK',
+        cancelText: null,
+        onConfirm: null 
+    });
 
-    const showAlert = (type, title, message) => {
-        setAlertConfig({ type, title, message });
+    const showAlert = (type, title, message, confirmText = 'OK', onConfirm = null, cancelText = null) => {
+        setAlertConfig({ type, title, message, confirmText, onConfirm, cancelText });
         setAlertVisible(true);
     };
 
@@ -37,10 +44,18 @@ const OtpVerifyScreen = ({ route, navigation }) => {
 
             setLoading(false);
             if (result && result.success) {
-                navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'Main' }],
-                });
+                showAlert(
+                    'success',
+                    'Registration Completed! ✓',
+                    'Your email and mobile number have been verified successfully. Please log in with your credentials to enter your account.',
+                    'Go to Login',
+                    () => {
+                        navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'Login' }],
+                        });
+                    }
+                );
             } else {
                 showAlert('error', 'Verification Failed', result?.message || 'Invalid or expired OTP code.');
             }
@@ -54,7 +69,7 @@ const OtpVerifyScreen = ({ route, navigation }) => {
     const handleResendOtp = async () => {
         setLoading(true);
         try {
-            const res = await dispatch(loginUserAction(mobile, email));
+            const res = await dispatch(registerUserAction(mobile, email));
             setLoading(false);
             if (res && res.success) {
                 showAlert('success', 'OTP Dispatched', res.message || `A fresh OTP code has been dispatched to your email.`);
@@ -75,14 +90,17 @@ const OtpVerifyScreen = ({ route, navigation }) => {
         <View style={[styles.mainContainer, { paddingTop: safeTopPadding }]}>
             <StatusBar barStyle="light-content" backgroundColor="#090E1A" translucent />
             
-            <Loader visible={loading} text="Authorizing Session..." overlay={true} />
+            <Loader visible={loading} text="Authorizing Account..." overlay={true} />
             <Alert 
                 visible={alertVisible} 
                 type={alertConfig.type} 
                 title={alertConfig.title} 
                 message={alertConfig.message} 
+                confirmText={alertConfig.confirmText}
+                cancelText={alertConfig.cancelText}
+                onConfirm={alertConfig.onConfirm}
+                onCancel={() => setAlertVisible(false)}
                 onClose={() => setAlertVisible(false)} 
-                onConfirm={() => setAlertVisible(false)}
             />
 
             {/* Back Button */}

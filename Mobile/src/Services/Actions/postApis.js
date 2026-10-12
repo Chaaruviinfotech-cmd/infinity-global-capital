@@ -8,6 +8,9 @@ export const loginUserAction = (mobile, email = '') => {
                 payload.email = email;
             }
             const res = await postApi('/login.php', payload);
+            if (res && res.success && res.data) {
+                dispatch({ type: 'SET_USER', payload: res.data });
+            }
             return res;
         } catch (error) {
             throw error;
@@ -30,16 +33,13 @@ export const registerUserAction = (mobile, email) => {
 };
 
 export const verifyOtpAction = (mobile, otp, email = '') => {
-    return async (dispatch) => {
+    return async () => {
         try {
             const payload = { mobile, otp };
             if (email) {
                 payload.email = email;
             }
             const res = await postApi('/verify_otp.php', payload);
-            if (res && res.success) {
-                dispatch({ type: 'SET_USER', payload: res.data });
-            }
             return res;
         } catch (error) {
             throw error;

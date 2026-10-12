@@ -16,10 +16,17 @@ const LoginScreen = ({ navigation }) => {
     
     // Custom Alert State
     const [alertVisible, setAlertVisible] = useState(false);
-    const [alertConfig, setAlertConfig] = useState({ type: 'info', title: '', message: '' });
+    const [alertConfig, setAlertConfig] = useState({ 
+        type: 'info', 
+        title: '', 
+        message: '',
+        confirmText: 'OK',
+        cancelText: null,
+        onConfirm: null 
+    });
 
-    const showAlert = (type, title, message) => {
-        setAlertConfig({ type, title, message });
+    const showAlert = (type, title, message, confirmText = 'OK', onConfirm = null, cancelText = null) => {
+        setAlertConfig({ type, title, message, confirmText, onConfirm, cancelText });
         setAlertVisible(true);
     };
 
@@ -29,8 +36,8 @@ const LoginScreen = ({ navigation }) => {
             return;
         }
 
-        if(email.length > 0 && !email.includes('@')) {
-            showAlert('error', 'Invalid Email', 'Please enter a valid email address.');
+        if(!email || !email.includes('@')) {
+            showAlert('error', 'Invalid Email', 'Please enter your registered email address.');
             return;
         }
 
@@ -41,14 +48,27 @@ const LoginScreen = ({ navigation }) => {
             
             setLoading(false);
             if (result && result.success) {
-                const targetEmail = result.email_sent_to || email;
-                navigation.navigate('OtpVerify', { mobile: mobile, email: targetEmail });
+                // DIRECT LOGIN: No OTP, navigate straight to Main Dashboard!
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Main' }],
+                });
+            } else if (result && result.not_registered) {
+                // NOT MATCHED: Prompt user to register and navigate to Signup screen
+                showAlert(
+                    'warning',
+                    'Account Not Found',
+                    result.message || 'No account found matching this Mobile and Email. Please register your account to continue.',
+                    'Register Now',
+                    () => navigation.navigate('Signup', { prefillMobile: mobile, prefillEmail: email }),
+                    'Cancel'
+                );
             } else {
-                showAlert('error', 'Login Failed', result?.message || 'Unable to generate verification OTP. Please try again.');
+                showAlert('error', 'Login Failed', result?.message || 'Invalid mobile number or email.');
             }
         } catch (error) {
             setLoading(false);
-            showAlert('error', 'Connection Error', error?.message || 'Network error. Please check your internet connection.');
+            showAlert('error', 'Connection Error', error?.message || 'Network error. Please check your connection.');
             console.error("Login error:", error);
         }
     };
@@ -67,8 +87,11 @@ const LoginScreen = ({ navigation }) => {
                 type={alertConfig.type} 
                 title={alertConfig.title} 
                 message={alertConfig.message} 
+                confirmText={alertConfig.confirmText}
+                cancelText={alertConfig.cancelText}
+                onConfirm={alertConfig.onConfirm}
+                onCancel={() => setAlertVisible(false)}
                 onClose={() => setAlertVisible(false)} 
-                onConfirm={() => setAlertVisible(false)}
             />
 
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.contentWrapper}>
@@ -92,7 +115,7 @@ const LoginScreen = ({ navigation }) => {
                     </View>
 
                     <Text style={styles.welcomeText}>Welcome Back</Text>
-                    <Text style={styles.subWelcomeText}>Sign in to your trading demat account via OTP.</Text>
+                    <Text style={styles.subWelcomeText}>Sign in with your registered mobile & email.</Text>
                 </View>
 
                 {/* Input Card */}
@@ -150,7 +173,7 @@ const LoginScreen = ({ navigation }) => {
                         activeOpacity={0.85} 
                         disabled={loading}
                     >
-                        <Text style={styles.loginBtnText}>Continue with OTP</Text>
+                        <Text style={styles.loginBtnText}>Sign In to Account</Text>
                         <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                     </TouchableOpacity>
 
@@ -168,7 +191,7 @@ const LoginScreen = ({ navigation }) => {
                     <View style={styles.trustDivider} />
                     <View style={styles.trustItem}>
                         <Ionicons name="flash" size={14} color="#F59E0B" />
-                        <Text style={styles.trustText}>Instant OTP</Text>
+                        <Text style={styles.trustText}>Instant Access</Text>
                     </View>
                     <View style={styles.trustDivider} />
                     <View style={styles.trustItem}>

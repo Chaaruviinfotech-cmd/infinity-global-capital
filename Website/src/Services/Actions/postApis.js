@@ -82,6 +82,21 @@ export const deleteMarketStockAction = (stockId, symbol) => {
   };
 };
 
+export const updateMarketIndexAction = (payload) => {
+  return async () => {
+    try {
+      const res = await postApi('manage_market_stock.php', {
+        action: 'update_index',
+        ...payload,
+      });
+      return res;
+    } catch (error) {
+      console.error('[updateMarketIndexAction] Error:', error);
+      throw error;
+    }
+  };
+};
+
 // 4. Add / Credit / Debit Funds (Dispatches Transaction Slip Email)
 export const addFundsAction = (payload) => {
   return async () => {

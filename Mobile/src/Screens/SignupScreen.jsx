@@ -7,18 +7,25 @@ import { registerUserAction } from '../Services/Actions/postApis';
 import Loader from '../Components/Loader';
 import Alert from '../Components/Alert';
 
-const SignupScreen = ({ navigation }) => {
+const SignupScreen = ({ navigation, route }) => {
     const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
-    const [mobile, setMobile] = useState('');
-    const [email, setEmail] = useState('');
+    const [mobile, setMobile] = useState(route?.params?.prefillMobile || '');
+    const [email, setEmail] = useState(route?.params?.prefillEmail || '');
     const [loading, setLoading] = useState(false);
     
     const [alertVisible, setAlertVisible] = useState(false);
-    const [alertConfig, setAlertConfig] = useState({ type: 'info', title: '', message: '' });
+    const [alertConfig, setAlertConfig] = useState({ 
+        type: 'info', 
+        title: '', 
+        message: '',
+        confirmText: 'OK',
+        cancelText: null,
+        onConfirm: null 
+    });
 
-    const showAlert = (type, title, message) => {
-        setAlertConfig({ type, title, message });
+    const showAlert = (type, title, message, confirmText = 'OK', onConfirm = null, cancelText = null) => {
+        setAlertConfig({ type, title, message, confirmText, onConfirm, cancelText });
         setAlertVisible(true);
     };
 
@@ -37,14 +44,23 @@ const SignupScreen = ({ navigation }) => {
             const result = await dispatch(registerUserAction(mobile, email));
 
             setLoading(false);
-            if (result.success) {
-                navigation.navigate('OtpVerify', { mobile: mobile, email: email });
+            if (result && result.success) {
+                navigation.navigate('OtpVerify', { mobile: mobile, email: email, fromRegister: true });
+            } else if (result && result.already_registered) {
+                showAlert(
+                    'info', 
+                    'Already Registered', 
+                    result.message || 'An account is already registered with this mobile/email. Please login directly.',
+                    'Go to Login',
+                    () => navigation.navigate('Login'),
+                    'Cancel'
+                );
             } else {
-                showAlert('error', 'Registration Failed', result.message);
+                showAlert('error', 'Registration Failed', result?.message || 'Unable to register account.');
             }
         } catch (error) {
             setLoading(false);
-            showAlert('error', 'Connection Error', 'Network error. Please make sure XAMPP is running.');
+            showAlert('error', 'Connection Error', 'Network error. Please check your connection.');
             console.error(error);
         }
     };
@@ -63,8 +79,11 @@ const SignupScreen = ({ navigation }) => {
                 type={alertConfig.type} 
                 title={alertConfig.title} 
                 message={alertConfig.message} 
+                confirmText={alertConfig.confirmText}
+                cancelText={alertConfig.cancelText}
+                onConfirm={alertConfig.onConfirm}
+                onCancel={() => setAlertVisible(false)}
                 onClose={() => setAlertVisible(false)} 
-                onConfirm={() => setAlertVisible(false)}
             />
 
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.contentWrapper}>

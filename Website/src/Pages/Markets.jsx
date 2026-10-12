@@ -4,17 +4,24 @@ import { fetchMarketsAction } from '../Services/Actions/getApis';
 import { 
   updateMarketPriceAction, 
   createMarketStockAction, 
-  deleteMarketStockAction 
+  deleteMarketStockAction,
+  updateMarketIndexAction
 } from '../Services/Actions/postApis';
 import Layout from '../Components/Layout';
 import DataTable from '../Components/DataTable';
 import Loader from '../Components/Loader';
 import ThemeToggle from '../Components/ThemeToggle';
 
+const DEFAULT_INDICES = [
+  { id: 1, name: 'NIFTY 50', value: '25,420.35', day_change: '+207.45', day_change_percent: '+0.82%', badge: 'NSE LIVE', color: '#10B981', is_up: true },
+  { id: 2, name: 'SENSEX', value: '83,210.44', day_change: '+586.20', day_change_percent: '+0.71%', badge: 'BSE LIVE', color: '#2563EB', is_up: true },
+  { id: 3, name: 'BANK NIFTY', value: '52,180.10', day_change: '+592.80', day_change_percent: '+1.15%', badge: 'NSE LIVE', color: '#8B5CF6', is_up: true },
+];
+
 /**
  * 1:1 Replica of PHP admin markets desk (backend/admin/markets.php)
- * Featuring Live Price Desk, Index cards, full DataTable with horizontal scroll,
- * and Edit Price modal with automatic change calculation.
+ * Featuring Live Price Desk, Dynamic Index cards, full DataTable with horizontal scroll,
+ * and Edit Price / Edit Index modals with automatic change calculation.
  * Fully integrated with Services/Actions/getApis.js and postApis.js.
  */
 const Markets = () => {
@@ -25,8 +32,34 @@ const Markets = () => {
   const [stocks, setStocks] = useState(
     Array.isArray(marketsData) ? marketsData : marketsData?.stocks || []
   );
+  const [indices, setIndices] = useState(() => {
+    const saved = localStorage.getItem('igc_market_indices');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error('Error parsing stored indices', e);
+      }
+    }
+    return DEFAULT_INDICES;
+  });
   const [inlineEditMode, setInlineEditMode] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Edit Index Modal State
+  const [showIndexModal, setShowIndexModal] = useState(false);
+  const [indexForm, setIndexForm] = useState({
+    id: 1,
+    name: 'NIFTY 50',
+    value: '25,420.35',
+    prev_value: '25,212.90',
+    day_change: '+207.45',
+    day_change_percent: '+0.82%',
+    badge: 'NSE LIVE',
+    color: '#10B981',
+    auto_calc: true,
+  });
 
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -71,6 +104,10 @@ const Markets = () => {
         const list = Array.isArray(res.data) ? res.data : (res.data.stocks || []);
         setStocks(list);
       }
+      if (res && res.indices && Array.isArray(res.indices) && res.indices.length > 0) {
+        setIndices(res.indices);
+        localStorage.setItem('igc_market_indices', JSON.stringify(res.indices));
+      }
     } catch (e) {
       console.error('Failed to load markets:', e);
     } finally {
@@ -82,16 +119,91 @@ const Markets = () => {
     loadMarkets();
   }, [loadMarkets]);
 
-  // Compute gainers/losers count
-  const { gainersCount, losersCount } = useMemo(() => {
+  // Compute gainers/losers count and average change
+  const { gainersCount, losersCount, avgChange } = useMemo(() => {
     let g = 0;
     let l = 0;
+    let totalPct = 0;
     stocks.forEach((s) => {
+      const chg = parseFloat(s.day_change_percent) || 0;
+      totalPct += chg;
       if (s.is_up || Number(s.day_change) >= 0) g++;
       else l++;
     });
-    return { gainersCount: g, losersCount: l };
+    const avg = stocks.length > 0 ? Number((totalPct / stocks.length).toFixed(2)) : 0;
+    return { gainersCount: g, losersCount: l, avgChange: avg };
   }, [stocks]);
+
+  // Index Modal Handlers
+  const openEditIndexModal = (idx) => {
+    const cleanVal = String(idx.value).replace(/,/g, '');
+    const cleanChg = String(idx.day_change).replace(/[+,-]/g, '');
+    const prev = (parseFloat(cleanVal) - (String(idx.day_change).startsWith('-') ? -parseFloat(cleanChg) : parseFloat(cleanChg))) || parseFloat(cleanVal);
+    setIndexForm({
+      id: idx.id,
+      name: idx.name,
+      value: idx.value,
+      prev_value: prev.toFixed(2),
+      day_change: idx.day_change,
+      day_change_percent: idx.day_change_percent,
+      badge: idx.badge || 'NSE LIVE',
+      color: idx.color || '#10B981',
+      auto_calc: true,
+    });
+    setShowIndexModal(true);
+  };
+
+  const handleIndexValueChange = (field, val) => {
+    const updated = { ...indexForm, [field]: val };
+    if (updated.auto_calc) {
+      const cur = parseFloat(String(field === 'value' ? val : updated.value).replace(/,/g, '')) || 0;
+      const prev = parseFloat(String(field === 'prev_value' ? val : updated.prev_value).replace(/,/g, '')) || cur;
+      if (prev > 0) {
+        const diff = Number((cur - prev).toFixed(2));
+        const pct = Number(((diff / prev) * 100).toFixed(2));
+        updated.day_change = diff >= 0 ? `+${diff.toFixed(2)}` : `${diff.toFixed(2)}`;
+        updated.day_change_percent = pct >= 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`;
+      }
+    }
+    setIndexForm(updated);
+  };
+
+  const handleSaveIndex = async (e) => {
+    e.preventDefault();
+    try {
+      const isUp = !String(indexForm.day_change_percent).includes('-') && !String(indexForm.day_change).startsWith('-');
+      const payload = {
+        ...indexForm,
+        is_up: isUp ? 1 : 0,
+      };
+      await dispatch(updateMarketIndexAction(payload));
+
+      const updatedList = indices.map((idx) => {
+        if (idx.id === indexForm.id || idx.name === indexForm.name) {
+          return {
+            ...idx,
+            value: indexForm.value,
+            day_change: indexForm.day_change,
+            day_change_percent: indexForm.day_change_percent,
+            badge: indexForm.badge,
+            color: indexForm.color,
+            is_up: isUp,
+          };
+        }
+        return idx;
+      });
+      setIndices(updatedList);
+      localStorage.setItem('igc_market_indices', JSON.stringify(updatedList));
+
+      setToastMessage({
+        title: 'Market Index Updated',
+        body: `${indexForm.name} updated to ₹${indexForm.value} (${indexForm.day_change_percent})`,
+      });
+      setShowIndexModal(false);
+    } catch (err) {
+      alert(err.message || 'Error updating index');
+    }
+  };
 
   // Auto-calculation logic for modal form
   const handleModalPriceChange = (field, val) => {
@@ -489,7 +601,7 @@ const Markets = () => {
               Admin manual control desk: Set real market prices (LTP), daily % changes, and high/low ranges
             </p>
           </div>
-          <div className="d-flex gap-2">
+          <div className="d-flex flex-wrap gap-2">
             <span className="badge badge-market-stat px-3 py-2 text-info fw-bold">
               <i className="bi bi-check2-circle me-1"></i> {stocks.length} Equities Active
             </span>
@@ -499,54 +611,54 @@ const Markets = () => {
             <span className="badge badge-market-stat px-3 py-2 text-danger fw-bold">
               <i className="bi bi-arrow-down-circle me-1"></i> {losersCount} Losers
             </span>
+            <span className={`badge badge-market-stat px-3 py-2 fw-bold ${avgChange >= 0 ? 'text-success' : 'text-danger'}`}>
+              <i className={`bi ${avgChange >= 0 ? 'bi-graph-up-arrow' : 'bi-graph-down-arrow'} me-1`}></i>
+              {avgChange >= 0 ? `+${avgChange.toFixed(2)}%` : `${avgChange.toFixed(2)}%`} Avg Change
+            </span>
           </div>
         </div>
 
-        {/* Market Indices Row */}
+        {/* Dynamic Market Indices Row */}
         <div className="row g-4 mb-4">
-          <div className="col-md-4">
-            <div className="index-card" style={{ borderTop: '4px solid #10B981' }}>
-              <div className="d-flex justify-content-between align-items-center">
-                <span className="index-name">NIFTY 50</span>
-                <span className="badge bg-success-subtle text-success fw-bold">NSE LIVE</span>
-              </div>
-              <div className="index-val">25,420.35</div>
-              <div className="index-change">
-                <i className="bi bi-arrow-up-right"></i> +207.45 (+0.82%) Today
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-4">
-            <div className="index-card" style={{ borderTop: '4px solid #2563EB' }}>
-              <div className="d-flex justify-content-between align-items-center">
-                <span className="index-name">SENSEX</span>
-                <span className="badge bg-primary-subtle text-primary fw-bold">BSE LIVE</span>
-              </div>
-              <div className="index-val">83,210.44</div>
-              <div className="index-change">
-                <i className="bi bi-arrow-up-right"></i> +586.20 (+0.71%) Today
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-4">
-            <div className="index-card" style={{ borderTop: '4px solid #8B5CF6' }}>
-              <div className="d-flex justify-content-between align-items-center">
-                <span className="index-name">BANK NIFTY</span>
-                <span
-                  className="badge bg-purple-subtle fw-bold"
-                  style={{ color: '#A78BFA', background: 'rgba(139, 92, 246, 0.2)' }}
+          {indices.map((idx) => {
+            const isUp = idx.is_up !== false && (!String(idx.day_change_percent).includes('-') && !String(idx.day_change).startsWith('-'));
+            return (
+              <div className="col-md-4" key={idx.id || idx.name}>
+                <div 
+                  className="index-card position-relative" 
+                  style={{ borderTop: `4px solid ${idx.color || (isUp ? '#10B981' : '#EF4444')}` }}
                 >
-                  NSE LIVE
-                </span>
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <span className="index-name">{idx.name}</span>
+                    <div className="d-flex align-items-center gap-2">
+                      <span className={`badge ${isUp ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'} fw-bold`}>
+                        {idx.badge || 'LIVE'}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-info py-0 px-2 fw-bold"
+                        style={{ fontSize: '11px', borderRadius: '6px' }}
+                        onClick={() => openEditIndexModal(idx)}
+                        title={`Edit ${idx.name}`}
+                      >
+                        <i className="bi bi-pencil-square me-1"></i>Edit
+                      </button>
+                    </div>
+                  </div>
+                  <div className="index-val">
+                    {typeof idx.value === 'number' ? idx.value.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : idx.value}
+                  </div>
+                  <div className={`index-change ${isUp ? 'text-success' : 'text-danger'}`}>
+                    <i className={`bi ${isUp ? 'bi-arrow-up-right' : 'bi-arrow-down-right'} me-1`}></i>
+                    {String(idx.day_change).startsWith('+') || String(idx.day_change).startsWith('-') 
+                      ? idx.day_change 
+                      : (isUp ? `+${idx.day_change}` : idx.day_change)}
+                    {' '}({String(idx.day_change_percent).includes('%') ? idx.day_change_percent : `${idx.day_change_percent}%`}) Today
+                  </div>
+                </div>
               </div>
-              <div className="index-val">52,180.10</div>
-              <div className="index-change">
-                <i className="bi bi-arrow-up-right"></i> +592.80 (+1.15%) Today
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* Stocks Table Card converted to full DataTable */}
@@ -972,6 +1084,140 @@ const Markets = () => {
                     style={{ background: '#38BDF8', border: 'none' }}
                   >
                     <i className="bi bi-plus-circle me-1"></i> Add Stock to Market
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Edit Market Index Modal */}
+      {showIndexModal && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 1050 }}
+          tabIndex="-1"
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content modal-content-custom">
+              <div className="modal-header border-bottom border-secondary px-4 pt-4 pb-3">
+                <div>
+                  <h5 className="modal-title fw-bold text-theme-primary mb-0">
+                    <i className="bi bi-activity text-info me-2"></i> Edit {indexForm.name}
+                  </h5>
+                  <small className="text-theme-secondary">
+                    Update live market index value, day points change, and percentage
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setShowIndexModal(false)}
+                ></button>
+              </div>
+
+              <form onSubmit={handleSaveIndex}>
+                <div className="modal-body px-4 py-3">
+                  <div className="mb-3">
+                    <label className="form-label-custom">Index Name</label>
+                    <input
+                      type="text"
+                      className="form-control form-control-custom fw-bold"
+                      value={indexForm.name}
+                      readOnly
+                      style={{ opacity: 0.8 }}
+                    />
+                  </div>
+
+                  <div className="row g-3 mb-3">
+                    <div className="col-md-6">
+                      <label className="form-label-custom">Current Index Value (₹)</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-custom text-info fw-bold fs-5"
+                        value={indexForm.value}
+                        onChange={(e) => handleIndexValueChange('value', e.target.value)}
+                        required
+                        placeholder="e.g. 25,420.35"
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label-custom">Previous Close Value (₹)</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-custom text-light"
+                        value={indexForm.prev_value}
+                        onChange={(e) => handleIndexValueChange('prev_value', e.target.value)}
+                        placeholder="e.g. 25,212.90"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-check form-switch mb-3">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="autoCalcIndexSwitch"
+                      checked={indexForm.auto_calc}
+                      onChange={(e) => setIndexForm({ ...indexForm, auto_calc: e.target.checked })}
+                    />
+                    <label className="form-check-label text-theme-secondary small" htmlFor="autoCalcIndexSwitch">
+                      Auto-calculate Points & % change from Previous Close
+                    </label>
+                  </div>
+
+                  <div className="row g-3 mb-3">
+                    <div className="col-md-6">
+                      <label className="form-label-custom">Points Change</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-custom fw-bold"
+                        value={indexForm.day_change}
+                        onChange={(e) => setIndexForm({ ...indexForm, day_change: e.target.value })}
+                        placeholder="e.g. +207.45 or -150.20"
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label-custom">Percentage Change</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-custom fw-bold"
+                        value={indexForm.day_change_percent}
+                        onChange={(e) => setIndexForm({ ...indexForm, day_change_percent: e.target.value })}
+                        placeholder="e.g. +0.82% or -0.55%"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="form-label-custom">Exchange Live Badge</label>
+                    <select
+                      className="form-select form-control-custom"
+                      value={indexForm.badge}
+                      onChange={(e) => setIndexForm({ ...indexForm, badge: e.target.value })}
+                    >
+                      <option value="NSE LIVE">NSE LIVE</option>
+                      <option value="BSE LIVE">BSE LIVE</option>
+                      <option value="GLOBAL LIVE">GLOBAL LIVE</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="modal-footer border-top border-secondary px-4 py-3">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary px-4"
+                    onClick={() => setShowIndexModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-info text-dark fw-bold px-4"
+                    style={{ background: '#38BDF8', border: 'none' }}
+                  >
+                    <i className="bi bi-check2-circle me-1"></i> Save Index Value
                   </button>
                 </div>
               </form>
