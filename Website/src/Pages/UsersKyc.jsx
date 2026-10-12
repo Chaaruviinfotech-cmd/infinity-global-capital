@@ -81,9 +81,9 @@ const UsersKyc = () => {
       key: 'user_id',
       label: 'User ID',
       sortable: true,
-      headerClassName: 'ps-4',
+      headerClassName: 'ps-2 ps-sm-3',
       render: (u) => (
-        <span className="ps-3">
+        <span className="ps-1 ps-sm-2">
           <span
             className="badge"
             style={{

@@ -148,7 +148,7 @@ const DataTable = ({
     <div className="datatable-container w-100">
       {/* Top Controls: Page Size & Search Input */}
       {(showPageSize || showSearch || actions) && (
-        <div className="datatable-header d-flex flex-wrap justify-content-between align-items-center gap-3 px-4 py-3 border-bottom" style={{ borderColor: 'var(--border-color)' }}>
+        <div className="datatable-header d-flex flex-wrap justify-content-between align-items-center gap-2 gap-sm-3 px-3 px-sm-4 py-2.5 py-sm-3 border-bottom" style={{ borderColor: 'var(--border-color)' }}>
           <div className="d-flex align-items-center gap-2">
             {showPageSize && (
               <div className="d-flex align-items-center gap-2 text-theme-secondary small">
@@ -172,7 +172,7 @@ const DataTable = ({
           </div>
 
           {showSearch && (
-            <div className="datatable-search" style={{ width: '280px' }}>
+            <div className="datatable-search flex-grow-1 flex-sm-grow-0" style={{ maxWidth: '320px', width: '100%' }}>
               <div className="input-group input-group-sm">
                 <span className="input-group-text border-secondary text-info">
                   <i className="bi bi-search"></i>
@@ -276,7 +276,7 @@ const DataTable = ({
       {/* Bottom Pagination & Record Count Bar */}
       {showPagination && totalRecords > 0 && (
         <div
-          className="datatable-footer d-flex flex-wrap justify-content-between align-items-center px-4 py-3 border-top gap-3"
+          className="datatable-footer d-flex flex-wrap justify-content-between align-items-center px-3 px-sm-4 py-2.5 py-sm-3 border-top gap-3"
           style={{ borderColor: 'var(--border-color)' }}
         >
           <div className="text-theme-secondary small fw-medium">

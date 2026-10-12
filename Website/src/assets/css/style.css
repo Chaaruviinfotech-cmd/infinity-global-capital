@@ -447,7 +447,8 @@ body {
   color: #FFFFFF !important;
 }
 
-.dashboard-body {
+.dashboard-body,
+.main-wrapper.sidebar-collapsed .dashboard-body {
   padding: 2rem 2.5rem;
   max-width: 100% !important;
   width: 100% !important;
@@ -455,21 +456,32 @@ body {
   flex: 1;
 }
 
-.main-wrapper.sidebar-collapsed .dashboard-body {
-  width: 100% !important;
-  max-width: 100% !important;
-  padding: 2rem 2.5rem;
-}
-
 @media (max-width: 991.98px) {
-  .dashboard-body {
-    padding: 1.5rem 1.25rem;
+  .dashboard-body,
+  .main-wrapper.sidebar-collapsed .dashboard-body {
+    padding: 1.25rem 1rem !important;
   }
 }
 
 @media (max-width: 575.98px) {
-  .dashboard-body {
-    padding: 1rem 0.85rem;
+  .dashboard-body,
+  .main-wrapper.sidebar-collapsed .dashboard-body {
+    padding: 0.65rem 0.4rem !important;
+  }
+
+  .datatable-header,
+  .datatable-footer {
+    padding-left: 0.65rem !important;
+    padding-right: 0.65rem !important;
+  }
+
+  .datatable-search {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .card.rounded-4 {
+    border-radius: 14px !important;
   }
 }
 
