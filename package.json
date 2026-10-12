@@ -1,0 +1,16 @@
+{
+  "name": "infinity-global-capital",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Infinity Global Capital - Unified Workspace (Mobile App & Web Admin)",
+  "scripts": {
+    "web": "npm --prefix Website run dev",
+    "web:build": "npm --prefix Website run build",
+    "web:preview": "npm --prefix Website run preview",
+    "mobile": "npm --prefix Mobile start",
+    "mobile:android": "npm --prefix Mobile run android",
+    "mobile:ios": "npm --prefix Mobile run ios",
+    "mobile:lint": "npm --prefix Mobile run lint",
+    "start": "npm --prefix Website run dev"
+  }
+}
