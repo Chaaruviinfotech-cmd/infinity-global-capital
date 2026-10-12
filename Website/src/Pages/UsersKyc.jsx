@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchUsersKycAction } from '../Services/Actions/getApis';
-import { updateKycStatusAction } from '../Services/Actions/postApis';
+import { updateKycStatusAction, requestKycAction } from '../Services/Actions/postApis';
 import Layout from '../Components/Layout';
 import DataTable from '../Components/DataTable';
 import Loader from '../Components/Loader';
@@ -62,6 +62,29 @@ const UsersKyc = () => {
         setFeedback({
           type: 'danger',
           message: res?.message || 'Failed to update KYC status.',
+        });
+      }
+    } catch (err) {
+      setFeedback({ type: 'danger', message: err.message });
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleRequestKyc = async (userId) => {
+    setActionInProgress(`${userId}_request_kyc`);
+    try {
+      const res = await dispatch(requestKycAction(userId));
+      if (res && res.success) {
+        setFeedback({
+          type: 'success',
+          message: res.message || `KYC request alert sent to User #UID-${String(userId).padStart(4, '0')}! Mobile app will display alert.`,
+        });
+        loadUsers();
+      } else {
+        setFeedback({
+          type: 'danger',
+          message: res?.message || 'Failed to send KYC request alert.',
         });
       }
     } catch (err) {
@@ -133,7 +156,20 @@ const UsersKyc = () => {
       key: 'pan_number',
       label: 'PAN Number',
       sortable: true,
-      render: (u) => <code>{u.pan_number || '-'}</code>,
+      render: (u) => {
+        const isBlank = !u.pan_number || u.pan_number === '-' || u.pan_number.trim() === '';
+        if (isBlank) {
+          return (
+            <span className="d-inline-flex align-items-center gap-1">
+              <code className="text-theme-secondary">-</code>
+              <span className="badge bg-danger-subtle text-danger border border-danger-subtle" style={{ fontSize: '10.5px' }}>
+                Blank PAN
+              </span>
+            </span>
+          );
+        }
+        return <code className="text-info fw-bold">{u.pan_number}</code>;
+      },
     },
     {
       key: 'kyc_status',
@@ -141,8 +177,20 @@ const UsersKyc = () => {
       sortable: true,
       render: (u) => {
         const st = u.kyc_status || 'Pending';
-        if (st === 'Pending')
-          return <span className="badge bg-warning text-dark px-2 py-1">Pending</span>;
+        if (st === 'Pending') {
+          return (
+            <div>
+              <span className="badge bg-warning text-dark px-2 py-1">Pending</span>
+              {u.kyc_requested == 1 && (
+                <div>
+                  <span className="badge bg-info-subtle text-info border border-info-subtle mt-1" style={{ fontSize: '10px' }}>
+                    <i className="bi bi-bell-fill me-1"></i>Requested
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        }
         if (st === 'Approved')
           return <span className="badge bg-success px-2 py-1">Approved</span>;
         if (st === 'Rejected')
@@ -156,13 +204,29 @@ const UsersKyc = () => {
       sortable: false,
       headerClassName: 'text-end pe-4',
       render: (u) => {
+        const isPanBlank = !u.pan_number || u.pan_number === '-' || u.pan_number.trim() === '';
         const isPending = !u.kyc_status || u.kyc_status === 'Pending';
         const isApproving = actionInProgress === `${u.user_id}_approve`;
         const isRejecting = actionInProgress === `${u.user_id}_reject`;
+        const isRequestingKyc = actionInProgress === `${u.user_id}_request_kyc`;
 
         return (
           <div className="text-end pe-3">
-            {isPending ? (
+            {isPanBlank ? (
+              // CASE 1: PAN is Blank -> Show "Request KYC" button
+              <button
+                type="button"
+                className="btn btn-sm btn-warning text-dark fw-bold px-3 d-inline-flex align-items-center gap-1 shadow-sm"
+                style={{ background: '#F59E0B', border: 'none', borderRadius: '8px' }}
+                disabled={isRequestingKyc}
+                onClick={() => handleRequestKyc(u.user_id)}
+                title="Send KYC completion alert to user mobile app"
+              >
+                <i className="bi bi-bell-fill"></i>
+                {isRequestingKyc ? 'Requesting...' : (u.kyc_requested ? 'Re-Request KYC' : 'Request KYC')}
+              </button>
+            ) : isPending ? (
+              // CASE 2: PAN is Submitted & Pending -> Show Approve & Reject
               <div className="d-inline-flex gap-2">
                 <button
                   type="button"
@@ -182,9 +246,10 @@ const UsersKyc = () => {
                 </button>
               </div>
             ) : (
-              <button className="btn btn-sm btn-outline-secondary" disabled>
-                Verified
-              </button>
+              // CASE 3: Approved / Verified
+              <span className="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 fw-bold">
+                <i className="bi bi-check2-circle me-1"></i>Verified
+              </span>
             )}
           </div>
         );

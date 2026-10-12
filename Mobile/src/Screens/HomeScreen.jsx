@@ -4,13 +4,30 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchDashboardAction } from '../Services/Actions/getApis';
 import Loader from '../Components/Loader';
+import Alert from '../Components/Alert';
 
 const HomeScreen = ({ navigation }) => {
     const dispatch = useDispatch();
     const { user, dashboardData } = useSelector(state => state.action);
     const [loading, setLoading] = useState(true);
 
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        type: 'warning',
+        title: '',
+        message: '',
+        confirmText: 'OK',
+        cancelText: null,
+        onConfirm: null,
+    });
+
     const userId = user?.id || 1;
+    const isKycVerified = user?.is_kyc_verified == 1 || user?.kyc_status === 'Approved';
+
+    const showAlert = (type, title, message, confirmText = 'OK', onConfirm = null, cancelText = null) => {
+        setAlertConfig({ type, title, message, confirmText, onConfirm, cancelText });
+        setAlertVisible(true);
+    };
 
     const fetchDashboardData = useCallback(async () => {
         try {
@@ -25,6 +42,23 @@ const HomeScreen = ({ navigation }) => {
     useEffect(() => {
         fetchDashboardData();
     }, [fetchDashboardData]);
+
+    // Check if Admin requested KYC
+    useEffect(() => {
+        if (user?.kyc_requested == 1) {
+            showAlert(
+                'warning',
+                'Complete Your KYC',
+                'Admin has requested your KYC verification. Please upload your PAN card and Bank details to activate institutional trading and wallet services.',
+                'Complete KYC Now',
+                () => {
+                    setAlertVisible(false);
+                    navigation.navigate('KYC');
+                },
+                'Later'
+            );
+        }
+    }, [user?.kyc_requested, navigation]);
 
     if (loading || !dashboardData) {
         return (
@@ -50,6 +84,18 @@ const HomeScreen = ({ navigation }) => {
             
             {/* Ambient Background Glows */}
             <View style={styles.ambientGlow} />
+
+            <Alert 
+                visible={alertVisible} 
+                type={alertConfig.type} 
+                title={alertConfig.title} 
+                message={alertConfig.message} 
+                confirmText={alertConfig.confirmText}
+                cancelText={alertConfig.cancelText}
+                onConfirm={alertConfig.onConfirm}
+                onCancel={() => setAlertVisible(false)}
+                onClose={() => setAlertVisible(false)} 
+            />
 
             {/* Vibrant Header */}
             <View style={styles.header}>
@@ -90,6 +136,32 @@ const HomeScreen = ({ navigation }) => {
                     </View>
                 </View>
 
+                {/* KYC Warning Banner if Not Verified */}
+                {!isKycVerified && (
+                    <TouchableOpacity 
+                        style={styles.kycBanner} 
+                        onPress={() => navigation.navigate('KYC')}
+                        activeOpacity={0.85}
+                    >
+                        <View style={styles.kycBannerLeft}>
+                            <View style={styles.kycBannerIconBox}>
+                                <Ionicons name="warning" size={18} color="#F59E0B" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.kycBannerTitle}>
+                                    {user?.kyc_requested == 1 ? 'Action Required: Complete Your KYC' : 'KYC Verification Pending'}
+                                </Text>
+                                <Text style={styles.kycBannerSub}>
+                                    Wallet & Stock Trading locked until KYC approved.
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={styles.kycBannerBtn}>
+                            <Text style={styles.kycBannerBtnText}>Complete &rarr;</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 {/* Vibrant Hero Portfolio Card */}
                 <View style={styles.heroCard}>
                     <View style={styles.heroGlowCircle} />
@@ -98,7 +170,23 @@ const HomeScreen = ({ navigation }) => {
                         <Text style={styles.heroLabel}>Total Portfolio Value</Text>
                         <TouchableOpacity 
                             style={styles.addFundsBtn} 
-                            onPress={() => navigation.navigate('Funds')}
+                            onPress={() => {
+                                if (!isKycVerified) {
+                                    showAlert(
+                                        'warning',
+                                        'KYC Verification Required',
+                                        'Wallet deposits and margin additions are locked until Demat KYC is approved. Please complete your KYC to activate wallet features.',
+                                        'Complete KYC Now',
+                                        () => {
+                                            setAlertVisible(false);
+                                            navigation.navigate('KYC');
+                                        },
+                                        'Cancel'
+                                    );
+                                    return;
+                                }
+                                navigation.navigate('Funds');
+                            }}
                         >
                             <Ionicons name="add-circle" size={16} color="#38BDF8" />
                             <Text style={styles.addFundsText}>+ Add Funds</Text>
@@ -329,6 +417,54 @@ const styles = StyleSheet.create({
         paddingVertical: 5,
         borderRadius: 20,
         gap: 6,
+    },
+    kycBanner: {
+        marginHorizontal: 18,
+        marginBottom: 14,
+        padding: 12,
+        backgroundColor: 'rgba(245, 158, 11, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(245, 158, 11, 0.35)',
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    kycBannerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flex: 1,
+    },
+    kycBannerIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    kycBannerTitle: {
+        color: '#FCD34D',
+        fontSize: 13,
+        fontWeight: 'bold',
+    },
+    kycBannerSub: {
+        color: '#94A3B8',
+        fontSize: 11,
+        marginTop: 1,
+    },
+    kycBannerBtn: {
+        backgroundColor: '#F59E0B',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    kycBannerBtnText: {
+        color: '#090E1A',
+        fontSize: 11,
+        fontWeight: '900',
     },
     greenPulseDot: {
         width: 6,

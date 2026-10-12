@@ -20,10 +20,19 @@ const FundsScreen = ({ navigation }) => {
     const [amountInput, setAmountInput] = useState('');
     
     const [alertVisible, setAlertVisible] = useState(false);
-    const [alertConfig, setAlertConfig] = useState({ type: 'info', title: '', message: '' });
+    const [alertConfig, setAlertConfig] = useState({ 
+        type: 'info', 
+        title: '', 
+        message: '',
+        confirmText: 'OK',
+        cancelText: null,
+        onConfirm: null
+    });
 
-    const showAlert = (type, title, message) => {
-        setAlertConfig({ type, title, message });
+    const isKycVerified = user?.is_kyc_verified == 1 || user?.kyc_status === 'Approved';
+
+    const showAlert = (type, title, message, confirmText = 'OK', onConfirm = null, cancelText = null) => {
+        setAlertConfig({ type, title, message, confirmText, onConfirm, cancelText });
         setAlertVisible(true);
     };
 
@@ -35,6 +44,21 @@ const FundsScreen = ({ navigation }) => {
     };
 
     const handleEmailStatement = async () => {
+        if (!isKycVerified) {
+            showAlert(
+                'warning',
+                'KYC Verification Required',
+                'Official ledger passbook statements require an approved Demat KYC.',
+                'Complete KYC',
+                () => {
+                    setAlertVisible(false);
+                    navigation.navigate('KYC');
+                },
+                'Cancel'
+            );
+            return;
+        }
+
         setSendingStatement(true);
         try {
             const userId = user?.id || 1;
@@ -68,6 +92,21 @@ const FundsScreen = ({ navigation }) => {
     };
 
     const handleTransaction = async (type) => {
+        if (!isKycVerified) {
+            showAlert(
+                'warning',
+                'KYC Verification Required',
+                'Wallet deposit, withdrawals, and ledger transactions require an approved Demat KYC. Please complete your KYC verification.',
+                'Complete KYC Now',
+                () => {
+                    setAlertVisible(false);
+                    navigation.navigate('KYC');
+                },
+                'Cancel'
+            );
+            return;
+        }
+
         const numAmount = parseFloat(amountInput);
 
         if (isNaN(numAmount) || numAmount <= 0) {
@@ -128,8 +167,11 @@ const FundsScreen = ({ navigation }) => {
                 type={alertConfig.type} 
                 title={alertConfig.title} 
                 message={alertConfig.message} 
+                confirmText={alertConfig.confirmText || 'OK'}
+                cancelText={alertConfig.cancelText}
+                onConfirm={alertConfig.onConfirm || (() => setAlertVisible(false))}
+                onCancel={() => setAlertVisible(false)}
                 onClose={() => setAlertVisible(false)} 
-                onConfirm={() => setAlertVisible(false)}
             />
             
             {/* Top Header */}
@@ -150,6 +192,32 @@ const FundsScreen = ({ navigation }) => {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 
+                {/* KYC Warning Box if Not Verified */}
+                {!isKycVerified && (
+                    <TouchableOpacity 
+                        style={styles.kycWarningBox} 
+                        onPress={() => navigation.navigate('KYC')}
+                        activeOpacity={0.85}
+                    >
+                        <View style={styles.kycWarningLeft}>
+                            <View style={styles.kycWarningIconBox}>
+                                <Ionicons name="shield-outline" size={20} color="#F59E0B" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.kycWarningTitle}>
+                                    {user?.kyc_requested == 1 ? 'Action Required: Complete Your KYC' : 'Demat KYC Verification Pending'}
+                                </Text>
+                                <Text style={styles.kycWarningSub}>
+                                    Deposits & withdrawals are disabled until your KYC is verified.
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={styles.kycWarningBtn}>
+                            <Text style={styles.kycWarningBtnText}>Complete &rarr;</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 {/* Hero Margin Card */}
                 <View style={styles.heroCard}>
                     <View style={styles.heroGlowCircle} />
@@ -707,5 +775,53 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#38BDF8',
         letterSpacing: 0.3,
-    }
+    },
+    kycWarningBox: {
+        backgroundColor: 'rgba(245, 158, 11, 0.12)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(245, 158, 11, 0.4)',
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    kycWarningLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        flex: 1,
+    },
+    kycWarningIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    kycWarningTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#F59E0B',
+        marginBottom: 2,
+    },
+    kycWarningSub: {
+        fontSize: 11,
+        color: '#CBD5E1',
+        lineHeight: 15,
+    },
+    kycWarningBtn: {
+        backgroundColor: '#F59E0B',
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 8,
+    },
+    kycWarningBtnText: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
 });

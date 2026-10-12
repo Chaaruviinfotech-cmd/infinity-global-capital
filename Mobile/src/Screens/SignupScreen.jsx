@@ -10,6 +10,7 @@ import Alert from '../Components/Alert';
 const SignupScreen = ({ navigation, route }) => {
     const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
+    const [name, setName] = useState('');
     const [mobile, setMobile] = useState(route?.params?.prefillMobile || '');
     const [email, setEmail] = useState(route?.params?.prefillEmail || '');
     const [loading, setLoading] = useState(false);
@@ -30,6 +31,10 @@ const SignupScreen = ({ navigation, route }) => {
     };
 
     const handleSignup = async () => {
+        if (!name || name.trim().length < 2) {
+            showAlert('error', 'Name Required', 'Please enter your full name as per PAN card.');
+            return;
+        }
         if(mobile.length < 10) {
             showAlert('error', 'Invalid Mobile', 'Please enter a valid 10-digit mobile number.');
             return;
@@ -41,7 +46,7 @@ const SignupScreen = ({ navigation, route }) => {
 
         setLoading(true);
         try {
-            const result = await dispatch(registerUserAction(mobile, email));
+            const result = await dispatch(registerUserAction(name.trim(), mobile, email));
 
             setLoading(false);
             if (result && result.success) {
@@ -107,7 +112,22 @@ const SignupScreen = ({ navigation, route }) => {
                 {/* Form Card */}
                 <View style={styles.card}>
                     
-                    <Text style={styles.inputLabel}>MOBILE NUMBER</Text>
+                    <Text style={styles.inputLabel}>FULL NAME (AS PER PAN)</Text>
+                    <View style={styles.inputRow}>
+                        <View style={styles.iconBox}>
+                            <Ionicons name="person" size={18} color="#94A3B8" />
+                        </View>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Enter full legal name"
+                            placeholderTextColor="#64748B"
+                            autoCapitalize="words"
+                            value={name}
+                            onChangeText={setName}
+                        />
+                    </View>
+
+                    <Text style={[styles.inputLabel, { marginTop: 14 }]}>MOBILE NUMBER</Text>
                     <View style={styles.inputRow}>
                         <View style={styles.countryCodeBox}>
                             <Text style={styles.flag}>🇮🇳</Text>

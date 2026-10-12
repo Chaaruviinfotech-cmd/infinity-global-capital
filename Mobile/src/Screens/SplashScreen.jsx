@@ -1,7 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useDispatch } from 'react-redux';
 
 const SplashScreen = ({ navigation }) => {
+    const dispatch = useDispatch();
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.85)).current;
     const glowAnim = useRef(new Animated.Value(0.4)).current;
@@ -36,12 +39,29 @@ const SplashScreen = ({ navigation }) => {
             ),
         ]).start();
 
-        const timer = setTimeout(() => {
+        const checkSessionAndNavigate = async () => {
+            try {
+                const sessionStr = await AsyncStorage.getItem('user_session');
+                if (sessionStr) {
+                    const userData = JSON.parse(sessionStr);
+                    if (userData && (userData.id || userData.mobile)) {
+                        dispatch({ type: 'SET_USER', payload: userData });
+                        navigation.replace('Main');
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Error restoring session:', err);
+            }
             navigation.replace('Login');
-        }, 2400);
+        };
+
+        const timer = setTimeout(() => {
+            checkSessionAndNavigate();
+        }, 2200);
 
         return () => clearTimeout(timer);
-    }, []);
+    }, [dispatch, navigation]);
 
     return (
         <View style={styles.container}>

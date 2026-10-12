@@ -146,6 +146,21 @@ export const updateKycStatusAction = (kycId, userId, actionType) => {
   };
 };
 
+export const requestKycAction = (userId) => {
+  return async () => {
+    try {
+      const res = await postApi('admin_users.php', {
+        action: 'request_kyc',
+        user_id: userId,
+      });
+      return res;
+    } catch (error) {
+      console.error('[requestKycAction] Error:', error);
+      throw error;
+    }
+  };
+};
+
 // 7. Sidebar Responsive Toggle Controls
 export const toggleSidebarAction = () => ({ type: 'TOGGLE_SIDEBAR' });
 export const closeSidebarAction = () => ({ type: 'CLOSE_SIDEBAR' });

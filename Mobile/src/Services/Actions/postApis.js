@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { postApi } from '../helper';
 
 export const loginUserAction = (mobile, email = '') => {
@@ -9,6 +10,11 @@ export const loginUserAction = (mobile, email = '') => {
             }
             const res = await postApi('/login.php', payload);
             if (res && res.success && res.data) {
+                try {
+                    await AsyncStorage.setItem('user_session', JSON.stringify(res.data));
+                } catch (e) {
+                    console.error('Failed to persist user session:', e);
+                }
                 dispatch({ type: 'SET_USER', payload: res.data });
             }
             return res;
@@ -18,10 +24,10 @@ export const loginUserAction = (mobile, email = '') => {
     };
 };
 
-export const registerUserAction = (mobile, email) => {
+export const registerUserAction = (name, mobile, email) => {
     return async (dispatch) => {
         try {
-            const payload = { mobile, email };
+            const payload = { name, full_name: name, mobile, email };
             const res = await postApi('/register.php', payload);
             console.log("registerUserAction response:", res);
             return res;

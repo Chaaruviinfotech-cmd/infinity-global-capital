@@ -127,7 +127,20 @@ const WatchlistScreen = ({ navigation, route }) => {
         return matchesSearch;
     });
 
+    const isKycVerified = user?.is_kyc_verified == 1 || user?.kyc_status === 'Approved';
+
     const openTradeModal = (stk) => {
+        if (!isKycVerified) {
+            showAlert(
+                'warning',
+                'KYC Verification Required',
+                'Under SEBI / Exchange regulations, Demat KYC approval is mandatory before buying stocks or trading. Please complete your KYC verification.',
+                'Complete KYC Now',
+                () => navigation.navigate('KYC'),
+                'Cancel'
+            );
+            return;
+        }
         setSelectedStock(stk);
         setOrderQty('10');
         setTradeModalVisible(true);
@@ -157,6 +170,21 @@ const WatchlistScreen = ({ navigation, route }) => {
 
     const handlePlaceOrder = async () => {
         if (!selectedStock) return;
+
+        if (!isKycVerified) {
+            showAlert(
+                'warning',
+                'KYC Verification Required',
+                'You cannot buy stocks without KYC approval. Please complete your KYC verification.',
+                'Complete KYC',
+                () => {
+                    setTradeModalVisible(false);
+                    navigation.navigate('KYC');
+                },
+                'Cancel'
+            );
+            return;
+        }
 
         if (numQty <= 0) {
             showAlert('warning', 'Invalid Quantity', 'Please enter at least 1 share to execute.');

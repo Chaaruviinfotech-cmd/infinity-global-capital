@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Platform, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSelector, useDispatch } from 'react-redux';
 
 const ProfileScreen = ({ navigation }) => {
@@ -12,7 +13,12 @@ const ProfileScreen = ({ navigation }) => {
     const [isHindi, setIsHindi] = useState(false);
     const [twoFactorAuth, setTwoFactorAuth] = useState(true);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        try {
+            await AsyncStorage.removeItem('user_session');
+        } catch (e) {
+            console.error('Error clearing session on logout:', e);
+        }
         dispatch({ type: 'SET_USER', payload: null });
         navigation.reset({
             index: 0,
