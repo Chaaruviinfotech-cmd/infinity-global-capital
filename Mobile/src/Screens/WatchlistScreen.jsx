@@ -472,14 +472,25 @@ const WatchlistScreen = ({ navigation, route }) => {
                                 </Text>
                             </View>
 
-                            <TouchableOpacity 
-                                style={styles.quickBuyPill}
-                                activeOpacity={0.8}
-                                onPress={() => openTradeModal(s)}
-                            >
-                                <Ionicons name="cart-outline" size={12} color="#FFFFFF" style={styles.buyPillIcon} />
-                                <Text style={styles.quickBuyText}>BUY</Text>
-                            </TouchableOpacity>
+                            {(() => {
+                                const rawPrice = Number(typeof s.price === 'string' ? s.price.replace(/,/g, '') : s.price || s.current_price || 0);
+                                const isLocked = availableMargin < rawPrice;
+                                return (
+                                    <TouchableOpacity 
+                                        style={[styles.quickBuyPill, isLocked && styles.quickBuyPillLocked]}
+                                        activeOpacity={0.8}
+                                        onPress={() => openTradeModal(s)}
+                                    >
+                                        <Ionicons 
+                                            name={isLocked ? "lock-closed" : "cart-outline"} 
+                                            size={12} 
+                                            color="#FFFFFF" 
+                                            style={styles.buyPillIcon} 
+                                        />
+                                        <Text style={styles.quickBuyText}>{isLocked ? 'LOCK' : 'BUY'}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })()}
                         </View>
                     </TouchableOpacity>
                     );
@@ -681,30 +692,50 @@ const WatchlistScreen = ({ navigation, route }) => {
                                 <TouchableOpacity
                                     style={[
                                         styles.placeOrderBtn,
-                                        !isMarginSufficient && styles.placeOrderWarnBtn,
-                                        (orderLoading || orderInFlightRef.current) && styles.placeOrderBtnDisabled
+                                        !isMarginSufficient && styles.placeOrderLockedBtn,
+                                        (orderLoading || orderInFlightRef.current || !isMarginSufficient) && styles.placeOrderBtnDisabled
                                     ]}
-                                    activeOpacity={0.85}
-                                    onPress={handlePlaceOrder}
-                                    disabled={orderLoading || orderInFlightRef.current}
+                                    activeOpacity={isMarginSufficient ? 0.85 : 1}
+                                    onPress={isMarginSufficient ? handlePlaceOrder : null}
+                                    disabled={orderLoading || orderInFlightRef.current || !isMarginSufficient}
                                 >
                                     {orderLoading ? (
                                         <View style={styles.btnLoadingRow}>
                                             <ActivityIndicator size="small" color="#FFFFFF" />
                                             <Text style={styles.placeOrderBtnText}>EXECUTING BUY ORDER...</Text>
                                         </View>
+                                    ) : !isMarginSufficient ? (
+                                        <View style={styles.btnNormalRow}>
+                                            <Ionicons name="lock-closed" size={17} color="#94A3B8" />
+                                            <Text style={[styles.placeOrderBtnText, { color: '#94A3B8' }]}>
+                                                LOCKED · INSUFFICIENT BALANCE
+                                            </Text>
+                                        </View>
                                     ) : (
                                         <View style={styles.btnNormalRow}>
                                             <Ionicons name="flash" size={18} color="#FFFFFF" />
                                             <Text style={styles.placeOrderBtnText}>
-                                                {isMarginSufficient 
-                                                    ? `BUY ${selectedStock.symbol} (${numQty} SHARES)` 
-                                                    : `ADD FUNDS & BUY (${selectedStock.symbol})`
-                                                }
+                                                BUY {selectedStock.symbol} ({numQty} SHARES)
                                             </Text>
                                         </View>
                                     )}
                                 </TouchableOpacity>
+
+                                {!isMarginSufficient && (
+                                    <TouchableOpacity 
+                                        style={styles.unlockAddFundsBtn}
+                                        activeOpacity={0.8}
+                                        onPress={() => {
+                                            setTradeModalVisible(false);
+                                            navigation.navigate('Funds');
+                                        }}
+                                    >
+                                        <Ionicons name="add-circle" size={16} color="#38BDF8" />
+                                        <Text style={styles.unlockAddFundsText}>
+                                            Deposit ₹{marginShortfall.toLocaleString('en-IN', {minimumFractionDigits: 2})} to Unlock Buying &rarr;
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
 
                         </View>
@@ -1339,8 +1370,36 @@ const styles = StyleSheet.create({
     placeOrderWarnBtn: {
         backgroundColor: '#D97706',
     },
+    placeOrderLockedBtn: {
+        backgroundColor: 'rgba(30, 41, 59, 0.95)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(239, 68, 68, 0.45)',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    quickBuyPillLocked: {
+        backgroundColor: '#475569',
+        borderColor: '#64748B',
+    },
+    unlockAddFundsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(56, 189, 248, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(56, 189, 248, 0.35)',
+        paddingVertical: 12,
+        borderRadius: 12,
+        marginTop: 4,
+    },
+    unlockAddFundsText: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#38BDF8',
+    },
     placeOrderBtnDisabled: {
-        opacity: 0.65,
+        opacity: 0.75,
     },
     btnNormalRow: {
         flexDirection: 'row',

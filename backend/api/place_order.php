@@ -218,9 +218,12 @@ try {
             exit;
         }
 
+        $avg_buy_price = floatval($existing_hold['avg_price']);
+        $invested_deduction = round($quantity * $avg_buy_price, 2);
+        $new_invested = max(0, round($total_invested - $invested_deduction, 2));
         $proceeds = round($quantity * $execution_price, 2);
         $new_available = round($available_balance + $proceeds, 2);
-        mysqli_query($conn, "UPDATE wallets SET available_balance = $new_available, updated_at = NOW() WHERE user_id = $user_id");
+        mysqli_query($conn, "UPDATE wallets SET available_balance = $new_available, total_invested = $new_invested, updated_at = NOW() WHERE user_id = $user_id");
 
         // Insert order
         mysqli_query($conn, "INSERT INTO orders (user_id, stock_symbol, order_type, quantity, price, status, created_at) 
@@ -259,7 +262,8 @@ try {
         broadcast_socket_event('FUNDS_UPDATED', [
             'user_id' => $user_id,
             'available_balance' => $new_available,
-            'available_margin' => $new_available
+            'available_margin' => $new_available,
+            'total_invested' => $new_invested
         ]);
 
         echo json_encode([
