@@ -459,15 +459,15 @@ const WatchlistScreen = ({ navigation, route }) => {
                             <Text style={styles.stockPrice}>₹{s.price}</Text>
                             <View style={[
                                 styles.changePill, 
-                                { backgroundColor: s.isUp ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.18)',
-                                  borderColor: s.isUp ? 'rgba(52, 211, 153, 0.4)' : 'rgba(248, 113, 113, 0.4)' }
+                                { backgroundColor: (s.isUp === false || String(s.changePercent).startsWith('-') || String(s.change).startsWith('-') || Number(s.day_change) < 0 || Number(s.day_change_percent) < 0) ? 'rgba(239, 68, 68, 0.18)' : 'rgba(16, 185, 129, 0.18)',
+                                  borderColor: (s.isUp === false || String(s.changePercent).startsWith('-') || String(s.change).startsWith('-') || Number(s.day_change) < 0 || Number(s.day_change_percent) < 0) ? 'rgba(239, 68, 68, 0.4)' : 'rgba(52, 211, 153, 0.4)' }
                             ]}>
                                 <Ionicons 
-                                    name={s.isUp ? "caret-up" : "caret-down"} 
+                                    name={(s.isUp === false || String(s.changePercent).startsWith('-') || String(s.change).startsWith('-') || Number(s.day_change) < 0 || Number(s.day_change_percent) < 0) ? "caret-down" : "caret-up"} 
                                     size={12} 
-                                    color={s.isUp ? "#34D399" : "#F87171"} 
+                                    color={(s.isUp === false || String(s.changePercent).startsWith('-') || String(s.change).startsWith('-') || Number(s.day_change) < 0 || Number(s.day_change_percent) < 0) ? "#EF4444" : "#34D399"} 
                                 />
-                                <Text style={[styles.changePercent, { color: s.isUp ? "#34D399" : "#F87171" }]}>
+                                <Text style={[styles.changePercent, { color: (s.isUp === false || String(s.changePercent).startsWith('-') || String(s.change).startsWith('-') || Number(s.day_change) < 0 || Number(s.day_change_percent) < 0) ? "#EF4444" : "#34D399" }]}>
                                     {s.changePercent}
                                 </Text>
                             </View>
@@ -553,20 +553,25 @@ const WatchlistScreen = ({ navigation, route }) => {
                                     <Text style={styles.priceLabel}>Current Market Price (LTP)</Text>
                                     <Text style={styles.sheetLtp}>₹{selectedStock.price || selectedStock.current_price}</Text>
                                 </View>
-                                <View style={[
-                                    styles.sheetChangeBadge,
-                                    { backgroundColor: selectedStock.isUp ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                                      borderColor: selectedStock.isUp ? 'rgba(52, 211, 153, 0.4)' : 'rgba(248, 113, 113, 0.4)' }
-                                ]}>
-                                    <Ionicons 
-                                        name={selectedStock.isUp ? "caret-up" : "caret-down"} 
-                                        size={14} 
-                                        color={selectedStock.isUp ? "#34D399" : "#F87171"} 
-                                    />
-                                    <Text style={[styles.sheetChangeText, { color: selectedStock.isUp ? "#34D399" : "#F87171" }]}>
-                                        {selectedStock.changePercent || '+0.00%'}
-                                    </Text>
-                                </View>
+                                {(() => {
+                                    const isSelectedMinus = selectedStock.isUp === false || String(selectedStock.changePercent).startsWith('-') || String(selectedStock.change).startsWith('-') || Number(selectedStock.day_change) < 0 || Number(selectedStock.day_change_percent) < 0;
+                                    return (
+                                        <View style={[
+                                            styles.sheetChangeBadge,
+                                            { backgroundColor: isSelectedMinus ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                                              borderColor: isSelectedMinus ? 'rgba(239, 68, 68, 0.4)' : 'rgba(52, 211, 153, 0.4)' }
+                                        ]}>
+                                            <Ionicons 
+                                                name={isSelectedMinus ? "caret-down" : "caret-up"} 
+                                                size={14} 
+                                                color={isSelectedMinus ? "#EF4444" : "#34D399"} 
+                                            />
+                                            <Text style={[styles.sheetChangeText, { color: isSelectedMinus ? "#EF4444" : "#34D399" }]}>
+                                                {selectedStock.changePercent || '+0.00%'}
+                                            </Text>
+                                        </View>
+                                    );
+                                })()}
                             </View>
 
                             {/* Available Margin & Status */}
@@ -577,7 +582,7 @@ const WatchlistScreen = ({ navigation, route }) => {
                                 <View style={styles.marginRow}>
                                     <View>
                                         <Text style={styles.marginSubLabel}>Available Margin</Text>
-                                        <Text style={styles.marginAvailableVal}>
+                                        <Text style={[styles.marginAvailableVal, availableMargin < 0 && { color: '#EF4444' }]}>
                                             ₹{availableMargin.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                                         </Text>
                                     </View>
@@ -599,7 +604,7 @@ const WatchlistScreen = ({ navigation, route }) => {
                                         </View>
                                     ) : (
                                         <View style={styles.insufficientBadge}>
-                                            <Ionicons name="alert-circle" size={14} color="#F87171" />
+                                            <Ionicons name="alert-circle" size={14} color="#EF4444" />
                                             <Text style={styles.insufficientText}>
                                                 Short by ₹{marginShortfall.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                                             </Text>
@@ -1183,7 +1188,7 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     marginShortVal: {
-        color: '#F87171',
+        color: '#EF4444',
     },
     alignEnd: {
         alignItems: 'flex-end',
@@ -1216,7 +1221,7 @@ const styles = StyleSheet.create({
     insufficientText: {
         fontSize: 11,
         fontWeight: '700',
-        color: '#F87171',
+        color: '#EF4444',
     },
     orderProductType: {
         fontSize: 11,

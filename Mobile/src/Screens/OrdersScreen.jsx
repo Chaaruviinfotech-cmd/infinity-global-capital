@@ -115,7 +115,7 @@ const OrdersScreen = ({ navigation }) => {
                                 borderColor: isBuy ? 'rgba(52, 211, 153, 0.4)' : 'rgba(248, 113, 113, 0.4)' 
                             }
                         ]}>
-                            <Text style={[styles.typeText, { color: isBuy ? '#34D399' : '#F87171' }]}>
+                            <Text style={[styles.typeText, { color: isBuy ? '#34D399' : '#EF4444' }]}>
                                 {item.type}
                             </Text>
                         </View>

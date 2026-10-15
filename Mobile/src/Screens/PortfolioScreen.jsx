@@ -118,9 +118,9 @@ const PortfolioScreen = ({ navigation }) => {
                             <Ionicons 
                                 name={summary.total_pnl >= 0 ? "trending-up" : "trending-down"} 
                                 size={14} 
-                                color={summary.total_pnl >= 0 ? "#34D399" : "#F87171"} 
+                                color={summary.total_pnl >= 0 ? "#34D399" : "#EF4444"} 
                             />
-                            <Text style={[styles.pnlBadgeText, {color: summary.total_pnl >= 0 ? "#34D399" : "#F87171"}]}>
+                            <Text style={[styles.pnlBadgeText, {color: summary.total_pnl >= 0 ? "#34D399" : "#EF4444"}]}>
                                 {summary.total_pnl >= 0 ? '+' : ''}{summary.pnl_percent.toFixed(2)}%
                             </Text>
                         </View>
@@ -155,7 +155,7 @@ const PortfolioScreen = ({ navigation }) => {
                                     Avg. ₹{parseFloat(stock.avg_price).toLocaleString('en-IN', {minimumFractionDigits: 2})}
                                 </Text>
                                 <View style={[styles.stockPnlPill, {backgroundColor: stock.pnl >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)'}]}>
-                                    <Text style={[styles.stockPnlText, {color: stock.pnl >= 0 ? '#34D399' : '#F87171'}]}>
+                                    <Text style={[styles.stockPnlText, {color: stock.pnl >= 0 ? '#34D399' : '#EF4444'}]}>
                                         {stock.pnl >= 0 ? '+' : ''}₹{stock.pnl.toLocaleString('en-IN', {minimumFractionDigits: 2})} ({stock.pnl >= 0 ? '+' : ''}{stock.pnl_percent.toFixed(2)}%)
                                     </Text>
                                 </View>
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     pnlValDown: {
         fontSize: 26,
         fontWeight: '900',
-        color: '#F87171',
+        color: '#EF4444',
     },
     pnlBadge: {
         flexDirection: 'row',

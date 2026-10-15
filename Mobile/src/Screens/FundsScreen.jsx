@@ -282,7 +282,7 @@ const FundsScreen = ({ navigation }) => {
                         </View>
                     </View>
 
-                    <Text style={styles.balanceValue}>
+                    <Text style={[styles.balanceValue, fundsData.available_margin < 0 && { color: '#EF4444' }]}>
                         ₹{fundsData.available_margin.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                     </Text>
                     <Text style={styles.balanceHint}>Usable for Equity, Intraday & Option margins</Text>
@@ -341,7 +341,7 @@ const FundsScreen = ({ navigation }) => {
                             activeOpacity={0.85} 
                             onPress={() => handleTransaction('Withdrawal')}
                         >
-                            <Ionicons name="arrow-up-circle" size={18} color="#F87171" style={{marginRight: 6}} />
+                            <Ionicons name="arrow-up-circle" size={18} color="#EF4444" style={{marginRight: 6}} />
                             <Text style={styles.withdrawBtnText}>WITHDRAW (DR)</Text>
                         </TouchableOpacity>
                     </View>
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(239, 68, 68, 0.15)',
         borderWidth: 1.5,
-        borderColor: 'rgba(248, 113, 113, 0.4)',
+        borderColor: 'rgba(239, 68, 68, 0.4)',
         flexDirection: 'row',
         paddingVertical: 14,
         borderRadius: 12,
@@ -671,7 +671,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     withdrawBtnText: {
-        color: '#F87171',
+        color: '#EF4444',
         fontSize: 13,
         fontWeight: '900',
         letterSpacing: 0.5,
@@ -757,14 +757,14 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         backgroundColor: 'rgba(239, 68, 68, 0.2)',
         borderWidth: 1,
-        borderColor: 'rgba(248, 113, 113, 0.4)',
+        borderColor: 'rgba(239, 68, 68, 0.4)',
         alignItems: 'center',
         justifyContent: 'center',
     },
     drBadgeText: {
         fontSize: 12,
         fontWeight: '900',
-        color: '#F87171',
+        color: '#EF4444',
     },
     passbookTitle: {
         fontSize: 14,
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     amountDr: {
         fontSize: 16,
         fontWeight: '900',
-        color: '#F87171',
+        color: '#EF4444',
     },
     settledPill: {
         flexDirection: 'row',

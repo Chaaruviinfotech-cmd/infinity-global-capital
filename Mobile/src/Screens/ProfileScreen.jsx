@@ -111,7 +111,7 @@ const ProfileScreen = ({ navigation }) => {
                     <View style={styles.statDivider} />
                     <View style={styles.statBox}>
                         <Text style={styles.statLabel}>TRADING MARGIN</Text>
-                        <Text style={styles.statValGreen}>₹{Number(margin).toLocaleString('en-IN')}</Text>
+                        <Text style={[styles.statValGreen, Number(margin) < 0 && { color: '#EF4444' }]}>₹{Number(margin).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statBox}>

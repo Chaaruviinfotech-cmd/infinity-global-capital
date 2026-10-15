@@ -402,9 +402,12 @@ const HomeScreen = ({ navigation }) => {
                         ₹{totalPortfolioVal.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                     </Text>
 
-                    <View style={styles.pnlBadge}>
-                        <Ionicons name={dayPnl >= 0 ? "caret-up" : "caret-down"} size={16} color={dayPnl >= 0 ? "#34D399" : "#F87171"} />
-                        <Text style={[styles.pnlText, dayPnl < 0 && {color: '#F87171'}]}>
+                    <View style={[
+                        styles.pnlBadge,
+                        dayPnl < 0 && { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }
+                    ]}>
+                        <Ionicons name={dayPnl >= 0 ? "caret-up" : "caret-down"} size={16} color={dayPnl >= 0 ? "#34D399" : "#EF4444"} />
+                        <Text style={[styles.pnlText, dayPnl < 0 && { color: '#EF4444' }]}>
                             {dayPnl >= 0 ? '+' : ''}₹{dayPnl.toLocaleString('en-IN')} ({dayPnlPercent}%) Today
                         </Text>
                     </View>
@@ -418,7 +421,7 @@ const HomeScreen = ({ navigation }) => {
                         </View>
                         <View style={{alignItems: 'flex-end'}}>
                             <Text style={styles.metricSubLabel}>Available Margin</Text>
-                            <Text style={styles.metricSubValGreen}>₹{availableMargin.toLocaleString('en-IN')}</Text>
+                            <Text style={[styles.metricSubValGreen, availableMargin < 0 && { color: '#EF4444' }]}>₹{availableMargin.toLocaleString('en-IN')}</Text>
                         </View>
                     </View>
                 </View>
@@ -430,18 +433,30 @@ const HomeScreen = ({ navigation }) => {
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.indicesRow}>
-                    {market_indices.map((index, i) => (
-                        <View key={i} style={styles.indexCard}>
-                            <View style={styles.indexHeader}>
-                                <Text style={styles.indexName}>{index.name}</Text>
-                                <Ionicons name="trending-up" size={16} color="#10B981" />
+                    {market_indices.map((index, i) => {
+                        const isMinus = String(index.change).startsWith('-') || index.is_up === false || (typeof index.day_change !== 'undefined' && Number(index.day_change) < 0);
+                        return (
+                            <View key={i} style={styles.indexCard}>
+                                <View style={styles.indexHeader}>
+                                    <Text style={styles.indexName}>{index.name}</Text>
+                                    <Ionicons 
+                                        name={isMinus ? "trending-down" : "trending-up"} 
+                                        size={16} 
+                                        color={isMinus ? "#EF4444" : "#10B981"} 
+                                    />
+                                </View>
+                                <Text style={styles.indexPrice}>{index.value}</Text>
+                                <View style={[
+                                    styles.indexPill,
+                                    isMinus && { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)' }
+                                ]}>
+                                    <Text style={[styles.changeUp, isMinus && { color: '#EF4444' }]}>
+                                        {index.change}
+                                    </Text>
+                                </View>
                             </View>
-                            <Text style={styles.indexPrice}>{index.value}</Text>
-                            <View style={styles.indexPill}>
-                                <Text style={styles.changeUp}>{index.change}</Text>
-                            </View>
-                        </View>
-                    ))}
+                        );
+                    })}
                 </ScrollView>
 
                 {/* Interactive Candlestick & Price Trend Chart (Date & Company-wise) */}
@@ -466,11 +481,11 @@ const HomeScreen = ({ navigation }) => {
                         <Text style={styles.gridLabel}>Invested</Text>
                     </View>
 
-                    <View style={[styles.metricsCard, { borderColor: '#10B981' }]}>
-                        <View style={[styles.gridIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                            <Ionicons name="flash" size={18} color="#34D399" />
+                    <View style={[styles.metricsCard, { borderColor: dayPnl >= 0 ? '#10B981' : '#EF4444' }]}>
+                        <View style={[styles.gridIconBox, { backgroundColor: dayPnl >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }]}>
+                            <Ionicons name="flash" size={18} color={dayPnl >= 0 ? "#34D399" : "#EF4444"} />
                         </View>
-                        <Text style={[styles.gridVal, { color: dayPnl >= 0 ? '#34D399' : '#F87171' }]}>
+                        <Text style={[styles.gridVal, { color: dayPnl >= 0 ? '#34D399' : '#EF4444' }]}>
                             {dayPnl >= 0 ? '+' : ''}{dayPnlPercent}%
                         </Text>
                         <Text style={styles.gridLabel}>Day P&L</Text>
@@ -505,6 +520,7 @@ const HomeScreen = ({ navigation }) => {
                     {top_gainers.map((g, idx) => {
                         const colors = ['#38BDF8', '#C084FC', '#34D399', '#FBBF24'];
                         const col = colors[idx % colors.length];
+                        const isMinus = String(g.gain).startsWith('-') || String(g.change).startsWith('-') || g.is_up === false || (typeof g.day_change !== 'undefined' && Number(g.day_change) < 0);
                         return (
                             <TouchableOpacity 
                                 key={idx} 
@@ -525,7 +541,7 @@ const HomeScreen = ({ navigation }) => {
                                 </View>
                                 <View style={styles.stockRight}>
                                     <Text style={styles.stockPrice}>₹{g.price}</Text>
-                                    <Text style={styles.stockGain}>{g.gain}</Text>
+                                    <Text style={[styles.stockGain, isMinus && { color: '#EF4444' }]}>{g.gain}</Text>
                                 </View>
                             </TouchableOpacity>
                         );

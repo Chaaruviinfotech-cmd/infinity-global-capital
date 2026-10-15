@@ -6,8 +6,8 @@ import { PermissionsAndroid, Platform, Alert, Linking } from 'react-native';
    ===================================================== */
 
 // API Base URL
-export const BASE_URL = "http://192.168.95.239/INFINITY_GLOBAL_CAPITAL/backend/api"
-// export const BASE_URL = "https://mandipro.com/infinity_global_capital/api";
+// export const BASE_URL = "http://192.168.95.239/INFINITY_GLOBAL_CAPITAL/backend/api"
+export const BASE_URL = "https://mandipro.com/infinity_global_capital/api";
 const api = axios.create({
     baseURL: BASE_URL,
     timeout: 30000,
