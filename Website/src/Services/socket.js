@@ -1,9 +1,7 @@
 import { io } from 'socket.io-client';
 
-// Determine Socket server host (localhost or network IP)
-const SOCKET_URL = typeof window !== 'undefined' && window.location.hostname
-  ? `http://${window.location.hostname}:4000`
-  : 'http://localhost:4000';
+// Live Render WebSocket Server
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://igc-socket-server.onrender.com';
 
 export const socket = io(SOCKET_URL, {
   transports: ['websocket', 'polling'],

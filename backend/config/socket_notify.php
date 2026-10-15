@@ -13,7 +13,7 @@ if (!function_exists('broadcast_socket_event')) {
      * @return bool
      */
     function broadcast_socket_event($event, $data = [], $room = null) {
-        $socket_url = 'http://127.0.0.1:4000/api/broadcast';
+        $socket_url = 'https://igc-socket-server.onrender.com/api/broadcast';
         
         $body = [
             'event' => $event,

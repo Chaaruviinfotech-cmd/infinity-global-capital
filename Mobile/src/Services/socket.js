@@ -2,24 +2,8 @@ import { io } from 'socket.io-client';
 import { Platform } from 'react-native';
 import { BASE_URL } from './helper';
 
-// Dynamically resolve socket server host matching BASE_URL (e.g. 192.168.67.239:4000)
-const getSocketServerUrl = () => {
-  try {
-    if (BASE_URL) {
-      const match = BASE_URL.match(/^https?:\/\/([^:/]+)/);
-      if (match && match[1]) {
-        const host = match[1];
-        if (host === 'localhost' || host === '127.0.0.1') {
-          return Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
-        }
-        return `http://${host}:4000`;
-      }
-    }
-  } catch (e) {}
-  return 'http://192.168.31.17:4000';
-};
-
-export const SOCKET_SERVER_URL = getSocketServerUrl();
+// Live Render WebSocket Server (Public, HTTPS & WSS)
+export const SOCKET_SERVER_URL = 'https://igc-socket-server.onrender.com';
 
 console.log('📡 [Mobile Socket Target URL]:', SOCKET_SERVER_URL);
 
