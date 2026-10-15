@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrdersAction } from '../Services/Actions/getApis';
+import socket from '../Services/socket';
 
 const OrdersScreen = ({ navigation }) => {
     const insets = useSafeAreaInsets();
@@ -15,10 +16,6 @@ const OrdersScreen = ({ navigation }) => {
 
     const userId = user?.id || 1;
 
-    useEffect(() => {
-        loadOrders();
-    }, [userId]);
-
     const loadOrders = async () => {
         try {
             await dispatch(fetchOrdersAction(userId));
@@ -26,6 +23,32 @@ const OrdersScreen = ({ navigation }) => {
             console.error('Error loading orders:', e);
         }
     };
+
+    useEffect(() => {
+        loadOrders();
+
+        const handleOrderUpdate = (orderData) => {
+            if (!orderData || orderData.user_id == userId) {
+                loadOrders();
+            }
+        };
+
+        const handleRefresh = (data) => {
+            if (!data || data.target === 'orders' || data.target === 'all') {
+                loadOrders();
+            }
+        };
+
+        socket.on('ORDER_PLACED', handleOrderUpdate);
+        socket.on('ORDER_UPDATED', handleOrderUpdate);
+        socket.on('REFRESH_DATA', handleRefresh);
+
+        return () => {
+            socket.off('ORDER_PLACED', handleOrderUpdate);
+            socket.off('ORDER_UPDATED', handleOrderUpdate);
+            socket.off('REFRESH_DATA', handleRefresh);
+        };
+    }, [userId]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -37,7 +60,7 @@ const OrdersScreen = ({ navigation }) => {
 
     const filteredOrders = filter === 'ALL' 
         ? ordersList 
-        : ordersList.filter(o => o.status === filter);
+        : ordersList.filter(o => filter === 'RETURNED' ? (o.status === 'RETURNED' || o.status === 'CANCELLED') : o.status === filter);
 
     const safeTopPadding = Platform.OS === 'android' 
         ? Math.max(StatusBar.currentHeight || 24, insets.top) + 8 
@@ -47,6 +70,39 @@ const OrdersScreen = ({ navigation }) => {
         const isBuy = item.type === 'BUY';
         const isExecuted = item.status === 'EXECUTED';
         const isPending = item.status === 'PENDING';
+        const isReturned = item.status === 'RETURNED' || item.status === 'CANCELLED';
+
+        const statusBg = isExecuted 
+            ? 'rgba(16, 185, 129, 0.15)' 
+            : isReturned 
+            ? 'rgba(245, 158, 11, 0.18)' 
+            : isPending 
+            ? 'rgba(56, 189, 248, 0.15)' 
+            : 'rgba(148, 163, 184, 0.15)';
+
+        const statusBorder = isExecuted 
+            ? 'rgba(52, 211, 153, 0.35)' 
+            : isReturned 
+            ? 'rgba(245, 158, 11, 0.45)' 
+            : isPending 
+            ? 'rgba(56, 189, 248, 0.35)' 
+            : 'rgba(148, 163, 184, 0.3)';
+
+        const statusColor = isExecuted 
+            ? '#34D399' 
+            : isReturned 
+            ? '#F59E0B' 
+            : isPending 
+            ? '#38BDF8' 
+            : '#94A3B8';
+
+        const statusIcon = isExecuted 
+            ? 'checkmark-circle' 
+            : isReturned 
+            ? 'arrow-undo-circle' 
+            : isPending 
+            ? 'time' 
+            : 'close-circle';
 
         return (
             <View style={styles.orderCard}>
@@ -72,26 +128,18 @@ const OrdersScreen = ({ navigation }) => {
                     <View style={[
                         styles.statusBadge,
                         {
-                            backgroundColor: isExecuted 
-                                ? 'rgba(16, 185, 129, 0.15)' 
-                                : isPending 
-                                ? 'rgba(245, 158, 11, 0.15)' 
-                                : 'rgba(148, 163, 184, 0.15)',
-                            borderColor: isExecuted 
-                                ? 'rgba(52, 211, 153, 0.35)' 
-                                : isPending 
-                                ? 'rgba(251, 191, 36, 0.35)' 
-                                : 'rgba(148, 163, 184, 0.3)'
+                            backgroundColor: statusBg,
+                            borderColor: statusBorder
                         }
                     ]}>
                         <Ionicons 
-                            name={isExecuted ? "checkmark-circle" : isPending ? "time" : "close-circle"} 
+                            name={statusIcon} 
                             size={12} 
-                            color={isExecuted ? "#34D399" : isPending ? "#FBBF24" : "#94A3B8"} 
+                            color={statusColor} 
                         />
                         <Text style={[
                             styles.statusText,
-                            { color: isExecuted ? "#34D399" : isPending ? "#FBBF24" : "#94A3B8" }
+                            { color: statusColor }
                         ]}>
                             {item.status}
                         </Text>
@@ -140,7 +188,7 @@ const OrdersScreen = ({ navigation }) => {
 
             {/* Filter Tabs */}
             <View style={styles.filterContainer}>
-                {['ALL', 'EXECUTED', 'PENDING'].map(f => (
+                {['ALL', 'EXECUTED', 'RETURNED'].map(f => (
                     <TouchableOpacity 
                         key={f} 
                         style={[styles.filterBtn, filter === f && styles.filterBtnActive]}

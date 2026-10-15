@@ -1,15 +1,25 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchDashboardAction } from '../Services/Actions/getApis';
+import { fetchDashboardAction, fetchWatchlistAction } from '../Services/Actions/getApis';
 import Loader from '../Components/Loader';
 import Alert from '../Components/Alert';
+import CandleStickChart from '../Components/CandleStickChart';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import socket, { joinUserRoom } from '../Services/socket';
 
 const HomeScreen = ({ navigation }) => {
+    const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
-    const { user, dashboardData } = useSelector(state => state.action);
+    const { user, dashboardData, watchlistData } = useSelector(state => state.action);
     const [loading, setLoading] = useState(true);
+
+    const dashboardDataRef = useRef(dashboardData);
+    dashboardDataRef.current = dashboardData;
+    const userRef = useRef(user);
+    userRef.current = user;
 
     const [alertVisible, setAlertVisible] = useState(false);
     const [alertConfig, setAlertConfig] = useState({
@@ -29,22 +39,55 @@ const HomeScreen = ({ navigation }) => {
         setAlertVisible(true);
     };
 
+    const triggerForceLogout = useCallback(async (reason = 'Account has been deleted.') => {
+        try {
+            await AsyncStorage.removeItem('user_session');
+        } catch (e) {
+            console.error('Error clearing session on force logout:', e);
+        }
+        dispatch({ type: 'LOGOUT_USER' });
+        dispatch({ type: 'SET_USER', payload: null });
+        navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+        });
+    }, [dispatch, navigation]);
+
     const fetchDashboardData = useCallback(async () => {
         try {
-            await dispatch(fetchDashboardAction(userId));
+            const res = await dispatch(fetchDashboardAction(userId));
+            if (res && res.is_deleted) {
+                await triggerForceLogout('Your account has been deleted from the database.');
+                return;
+            }
         } catch (error) {
             console.error('Error fetching dashboard:', error);
         } finally {
             setLoading(false);
         }
-    }, [dispatch, userId]);
+    }, [dispatch, userId, triggerForceLogout]);
 
     useEffect(() => {
         fetchDashboardData();
+        dispatch(fetchWatchlistAction());
+    }, [fetchDashboardData, dispatch]);
+
+    // Periodic heartbeat sync to catch direct database user deletions
+    useEffect(() => {
+        const heartbeat = setInterval(() => {
+            fetchDashboardData();
+        }, 8000);
+        return () => clearInterval(heartbeat);
     }, [fetchDashboardData]);
 
     // Check if Admin requested KYC
     useEffect(() => {
+        const isApproved = user?.is_kyc_verified == 1 || user?.kyc_status === 'Approved';
+        if (isApproved) {
+            setAlertVisible(false);
+            return;
+        }
+
         if (user?.kyc_requested == 1) {
             showAlert(
                 'warning',
@@ -57,20 +100,155 @@ const HomeScreen = ({ navigation }) => {
                 },
                 'Later'
             );
+        } else {
+            setAlertVisible(false);
         }
-    }, [user?.kyc_requested, navigation]);
+    }, [user?.kyc_requested, user?.is_kyc_verified, user?.kyc_status, navigation]);
+
+    // Real-Time Socket Connection & Listeners
+    useEffect(() => {
+        if (userId) {
+            joinUserRoom(userId);
+        }
+
+        const handleMarketIndex = (indexData) => {
+            if (!indexData || !indexData.name) return;
+            const currentDash = dashboardDataRef.current;
+            if (currentDash?.market_indices) {
+                const updatedIndices = currentDash.market_indices.map(idx => 
+                    idx.name === indexData.name ? { ...idx, ...indexData } : idx
+                );
+                dispatch({
+                    type: 'SET_DASHBOARD_DATA',
+                    payload: { ...currentDash, market_indices: updatedIndices }
+                });
+            }
+        };
+
+        const handleMarketPrice = (stockData) => {
+            if (!stockData || !stockData.symbol) return;
+            const currentDash = dashboardDataRef.current;
+            if (currentDash?.top_gainers) {
+                const updatedGainers = currentDash.top_gainers.map(g => 
+                    g.symbol === stockData.symbol ? { ...g, ...stockData } : g
+                );
+                dispatch({
+                    type: 'SET_DASHBOARD_DATA',
+                    payload: { ...currentDash, top_gainers: updatedGainers }
+                });
+            }
+        };
+
+        const handleFunds = (fundsData) => {
+            if (!fundsData || fundsData.user_id == userId) {
+                fetchDashboardData();
+            }
+        };
+
+        const handleKyc = (kycData) => {
+            if (!kycData || String(kycData.user_id) === String(userId)) {
+                const isApproved = Number(kycData.is_kyc_verified) === 1 || kycData.kyc_status === 'Approved';
+                const isRequested = Number(kycData.kyc_requested) === 1 && !isApproved;
+                const currentUser = userRef.current;
+
+                const updatedUser = {
+                    ...currentUser,
+                    is_kyc_verified: isApproved ? 1 : (kycData.is_kyc_verified !== undefined ? Number(kycData.is_kyc_verified) : currentUser?.is_kyc_verified),
+                    kyc_status: kycData.kyc_status || (isApproved ? 'Approved' : currentUser?.kyc_status),
+                    kyc_requested: isRequested ? 1 : 0
+                };
+
+                dispatch({
+                    type: 'SET_USER',
+                    payload: updatedUser
+                });
+
+                AsyncStorage.setItem('user_session', JSON.stringify(updatedUser)).catch(() => {});
+
+                if (isApproved || !isRequested) {
+                    setAlertVisible(false);
+                } else if (isRequested) {
+                    showAlert(
+                        'warning',
+                        'Complete Your KYC',
+                        'Admin has requested your KYC verification. Please upload your PAN card and Bank details to activate institutional trading and wallet services.',
+                        'Complete KYC Now',
+                        () => {
+                            setAlertVisible(false);
+                            navigation.navigate('KYC');
+                        },
+                        'Later'
+                    );
+                }
+
+                fetchDashboardData();
+            }
+        };
+
+        const handleOrder = (orderData) => {
+            if (!orderData || orderData.user_id == userId) {
+                fetchDashboardData();
+            }
+        };
+
+        const handleRefresh = (data) => {
+            if (!data || data.target === 'dashboard' || data.target === 'all' || data.target === 'kyc') {
+                fetchDashboardData();
+            }
+        };
+
+        const handleForceLogout = (data) => {
+            const targetId = data?.user_id;
+            const myId = userRef.current?.id || userId;
+            if (!targetId || String(targetId) === String(myId)) {
+                console.log('[Socket] FORCE_LOGOUT received for user:', targetId);
+                triggerForceLogout(data?.message || 'Account has been deleted or deactivated.');
+            }
+        };
+
+        const handleUserDeleted = (data) => {
+            const targetId = data?.user_id;
+            const myId = userRef.current?.id || userId;
+            if (!targetId || String(targetId) === String(myId)) {
+                console.log('[Socket] USER_DELETED received for user:', targetId);
+                triggerForceLogout(data?.message || 'Your account was deleted by administrator.');
+            }
+        };
+
+        socket.on('MARKET_INDEX_UPDATED', handleMarketIndex);
+        socket.on('MARKET_PRICE_UPDATED', handleMarketPrice);
+        socket.on('FUNDS_UPDATED', handleFunds);
+        socket.on('KYC_STATUS_UPDATED', handleKyc);
+        socket.on('ORDER_PLACED', handleOrder);
+        socket.on('ORDER_UPDATED', handleOrder);
+        socket.on('REFRESH_DATA', handleRefresh);
+        socket.on('FORCE_LOGOUT', handleForceLogout);
+        socket.on('USER_DELETED', handleUserDeleted);
+
+        return () => {
+            socket.off('MARKET_INDEX_UPDATED', handleMarketIndex);
+            socket.off('MARKET_PRICE_UPDATED', handleMarketPrice);
+            socket.off('FUNDS_UPDATED', handleFunds);
+            socket.off('KYC_STATUS_UPDATED', handleKyc);
+            socket.off('ORDER_PLACED', handleOrder);
+            socket.off('ORDER_UPDATED', handleOrder);
+            socket.off('REFRESH_DATA', handleRefresh);
+            socket.off('FORCE_LOGOUT', handleForceLogout);
+            socket.off('USER_DELETED', handleUserDeleted);
+        };
+    }, [userId, fetchDashboardData, dispatch, navigation, triggerForceLogout]);
 
     if (loading) {
         return (
-            <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.safeArea, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
                 <Loader visible={true} text="Connecting to Exchange..." overlay={true} />
-            </SafeAreaView>
+            </View>
         );
     }
 
     if (!dashboardData) {
         return (
-            <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+            <View style={[styles.safeArea, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
                 <Ionicons name="cloud-offline-outline" size={48} color="#F87171" />
                 <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 16 }}>Unable to Load Dashboard</Text>
                 <Text style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', marginTop: 8, marginBottom: 20 }}>
@@ -82,7 +260,7 @@ const HomeScreen = ({ navigation }) => {
                 >
                     <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Retry</Text>
                 </TouchableOpacity>
-            </SafeAreaView>
+            </View>
         );
     }
 
@@ -107,7 +285,7 @@ const HomeScreen = ({ navigation }) => {
     const displayName = user?.full_name || 'Valued Trader';
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 8 : 0) }]}>
             
             {/* Ambient Background Glows */}
             <View style={styles.ambientGlow} />
@@ -266,42 +444,54 @@ const HomeScreen = ({ navigation }) => {
                     ))}
                 </ScrollView>
 
-                {/* Quick 4-Grid Colorful Badges */}
-                <View style={styles.gridRow}>
-                    <View style={[styles.gridCard, {borderColor: '#3B82F6'}]}>
-                        <View style={[styles.gridIconBox, {backgroundColor: 'rgba(59, 130, 246, 0.15)'}]}>
+                {/* Interactive Candlestick & Price Trend Chart (Date & Company-wise) */}
+                <CandleStickChart 
+                    stockList={dashboardData?.stocks || watchlistData || []} 
+                    onSelectStock={(sym) => navigation.navigate('Watchlist', { selectedSymbol: sym })} 
+                />
+
+                {/* Quick 4-Box Metrics Row - Single Line Horizontal Scroll */}
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={styles.metricsHorizontalScroll}
+                >
+                    <View style={[styles.metricsCard, { borderColor: '#3B82F6' }]}>
+                        <View style={[styles.gridIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
                             <Ionicons name="pie-chart" size={18} color="#60A5FA" />
                         </View>
-                        <Text style={styles.gridVal}>₹{(investedAmount / 100000).toFixed(2)}L</Text>
+                        <Text style={styles.gridVal}>
+                            ₹{investedAmount >= 100000 ? (investedAmount / 100000).toFixed(2) + 'L' : Number(investedAmount).toLocaleString('en-IN')}
+                        </Text>
                         <Text style={styles.gridLabel}>Invested</Text>
                     </View>
 
-                    <View style={[styles.gridCard, {borderColor: '#10B981'}]}>
-                        <View style={[styles.gridIconBox, {backgroundColor: 'rgba(16, 185, 129, 0.15)'}]}>
+                    <View style={[styles.metricsCard, { borderColor: '#10B981' }]}>
+                        <View style={[styles.gridIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                             <Ionicons name="flash" size={18} color="#34D399" />
                         </View>
-                        <Text style={[styles.gridVal, {color: dayPnl >= 0 ? '#34D399' : '#F87171'}]}>
+                        <Text style={[styles.gridVal, { color: dayPnl >= 0 ? '#34D399' : '#F87171' }]}>
                             {dayPnl >= 0 ? '+' : ''}{dayPnlPercent}%
                         </Text>
                         <Text style={styles.gridLabel}>Day P&L</Text>
                     </View>
 
-                    <View style={[styles.gridCard, {borderColor: '#8B5CF6'}]}>
-                        <View style={[styles.gridIconBox, {backgroundColor: 'rgba(139, 92, 246, 0.15)'}]}>
+                    <View style={[styles.metricsCard, { borderColor: '#8B5CF6' }]}>
+                        <View style={[styles.gridIconBox, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
                             <Ionicons name="trophy" size={18} color="#A78BFA" />
                         </View>
                         <Text style={styles.gridVal}>+18.4%</Text>
                         <Text style={styles.gridLabel}>1Y Return</Text>
                     </View>
 
-                    <View style={[styles.gridCard, {borderColor: '#F59E0B'}]}>
-                        <View style={[styles.gridIconBox, {backgroundColor: 'rgba(245, 158, 11, 0.15)'}]}>
+                    <View style={[styles.metricsCard, { borderColor: '#F59E0B' }]}>
+                        <View style={[styles.gridIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                             <Ionicons name="layers" size={18} color="#FBBF24" />
                         </View>
-                        <Text style={styles.gridVal}>{holdingsCount || 16}</Text>
+                        <Text style={styles.gridVal}>{holdingsCount}</Text>
                         <Text style={styles.gridLabel}>Holdings</Text>
                     </View>
-                </View>
+                </ScrollView>
 
                 {/* Top Movers Watchlist Preview */}
                 <View style={styles.sectionHeader}>
@@ -343,7 +533,7 @@ const HomeScreen = ({ navigation }) => {
                 </View>
 
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -683,17 +873,14 @@ const styles = StyleSheet.create({
         color: '#34D399',
     },
 
-    /* 4-Grid */
-    gridRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+    /* 4-Box Horizontal Scroll */
+    metricsHorizontalScroll: {
         paddingHorizontal: 18,
-        marginTop: 18,
-        gap: 10,
+        marginTop: 16,
+        gap: 12,
     },
-    gridCard: {
-        flex: 1,
-        minWidth: '46%',
+    metricsCard: {
+        width: 135,
         backgroundColor: 'rgba(30, 41, 59, 0.7)',
         borderWidth: 1,
         borderRadius: 16,

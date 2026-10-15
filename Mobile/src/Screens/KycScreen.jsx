@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import { submitKycAction } from '../Services/Actions/postApis';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Loader from '../Components/Loader';
 import Alert from '../Components/Alert';
 
@@ -56,6 +57,18 @@ const KycScreen = ({ navigation }) => {
 
             setLoading(false);
             if(result.success) {
+                const updatedUser = {
+                    ...user,
+                    kyc_requested: 0,
+                    kyc_status: 'Pending',
+                    full_name: formData.full_name,
+                    pan_number: formData.pan_number,
+                    dob: formData.dob,
+                    account_no: formData.account_no,
+                    ifsc_code: formData.ifsc_code
+                };
+                dispatch({ type: 'SET_USER', payload: updatedUser });
+                AsyncStorage.setItem('user_session', JSON.stringify(updatedUser)).catch(() => {});
                 showAlert('success', 'Submitted', 'Your KYC details have been submitted for admin approval.');
             } else {
                 showAlert('error', 'Failed', result.message);

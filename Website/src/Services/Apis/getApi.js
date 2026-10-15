@@ -7,8 +7,9 @@ import axios from 'axios';
  * Connects to the PHP REST API hosted on Apache / XAMPP.
  */
 // Live Server: https://mandipro.com/infinity_global_capital/api
-// Local Server: http://localhost/INFINITY_GLOBAL_CAPITAL/backend/api
-export const BASE_URL = import.meta.env.VITE_API_URL || 'https://mandipro.com/infinity_global_capital/api';
+// Local Server: 
+export const BASE_URL = 'http://localhost/INFINITY_GLOBAL_CAPITAL/backend/api';
+// export const BASE_URL = import.meta.env.VITE_API_URL || 'https://mandipro.com/infinity_global_capital/api';
 
 const api = axios.create({
   baseURL: BASE_URL,

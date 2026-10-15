@@ -26,9 +26,10 @@ const ICONS = {
     KYC: ['shield-checkmark', 'shield-checkmark-outline'],
 };
 
-const CustomTabBar = ({ state, descriptors, navigation }) => {
+const CustomTabBar = React.memo(({ state, descriptors, navigation }) => {
     const insets = useSafeAreaInsets();
-    const safePaddingBottom = Math.max(insets.bottom, 12);
+    // Ensure sufficient bottom padding above hardware navigation buttons / gesture bar
+    const safePaddingBottom = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 12);
 
     return (
         <View style={[styles.bar, { paddingBottom: safePaddingBottom }]}>
@@ -76,11 +77,21 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             })}
         </View>
     );
-};
+});
+
+const renderCustomTabBar = (props) => <CustomTabBar {...props} />;
 
 const BottomTabNavigation = () => {
     return (
-        <Tab.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+        <Tab.Navigator 
+            tabBar={renderCustomTabBar} 
+            screenOptions={{ 
+                headerShown: false,
+                lazy: true,
+                detachInactiveScreens: true,
+                freezeOnBlur: true
+            }}
+        >
             <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Watchlist" component={WatchlistScreen} />
             <Tab.Screen name="Portfolio" component={PortfolioScreen} />

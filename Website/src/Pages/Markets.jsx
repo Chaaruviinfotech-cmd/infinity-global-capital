@@ -11,6 +11,7 @@ import Layout from '../Components/Layout';
 import DataTable from '../Components/DataTable';
 import Loader from '../Components/Loader';
 import ThemeToggle from '../Components/ThemeToggle';
+import socket from '../Services/socket';
 
 const DEFAULT_INDICES = [
   { id: 1, name: 'NIFTY 50', value: '25,420.35', day_change: '+207.45', day_change_percent: '+0.82%', badge: 'NSE LIVE', color: '#10B981', is_up: true },
@@ -117,6 +118,47 @@ const Markets = () => {
 
   useEffect(() => {
     loadMarkets();
+
+    const handlePriceUpdate = (updatedStock) => {
+      if (!updatedStock || !updatedStock.symbol) return;
+      setStocks((prev) => {
+        const idx = prev.findIndex((s) => s.symbol === updatedStock.symbol);
+        if (idx !== -1) {
+          const clone = [...prev];
+          clone[idx] = { ...clone[idx], ...updatedStock };
+          return clone;
+        } else {
+          return [updatedStock, ...prev];
+        }
+      });
+    };
+
+    const handleIndexUpdate = (updatedIndex) => {
+      if (!updatedIndex || !updatedIndex.name) return;
+      setIndices((prev) =>
+        prev.map((idx) =>
+          idx.name === updatedIndex.name
+            ? { ...idx, ...updatedIndex }
+            : idx
+        )
+      );
+    };
+
+    const handleRefresh = (data) => {
+      if (!data || data.target === 'markets' || data.target === 'all') {
+        loadMarkets();
+      }
+    };
+
+    socket.on('MARKET_PRICE_UPDATED', handlePriceUpdate);
+    socket.on('MARKET_INDEX_UPDATED', handleIndexUpdate);
+    socket.on('REFRESH_DATA', handleRefresh);
+
+    return () => {
+      socket.off('MARKET_PRICE_UPDATED', handlePriceUpdate);
+      socket.off('MARKET_INDEX_UPDATED', handleIndexUpdate);
+      socket.off('REFRESH_DATA', handleRefresh);
+    };
   }, [loadMarkets]);
 
   // Compute gainers/losers count and average change

@@ -1,35 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPortfolioAction } from '../Services/Actions/getApis';
 import Loader from '../Components/Loader';
+import socket from '../Services/socket';
 
 const PortfolioScreen = ({ navigation }) => {
+    const insets = useSafeAreaInsets();
     const dispatch = useDispatch();
     const { user, portfolioData } = useSelector(state => state.action);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        fetchPortfolio();
-    }, []);
+    const userRef = useRef(user);
+    userRef.current = user;
 
-    const fetchPortfolio = async () => {
+    const fetchPortfolio = useCallback(async () => {
         try {
-            const userId = user?.id || 1;
+            const userId = userRef.current?.id || 1;
             await dispatch(fetchPortfolioAction(userId));
         } catch(e) {
-            console.error(e);
+            console.error('Error fetching portfolio:', e);
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        fetchPortfolio();
+
+        const handleUpdate = () => {
+            fetchPortfolio();
+        };
+
+        socket.on('ORDER_PLACED', handleUpdate);
+        socket.on('ORDER_UPDATED', handleUpdate);
+        socket.on('FUNDS_UPDATED', handleUpdate);
+        socket.on('MARKET_PRICE_UPDATED', handleUpdate);
+        socket.on('REFRESH_DATA', handleUpdate);
+
+        return () => {
+            socket.off('ORDER_PLACED', handleUpdate);
+            socket.off('ORDER_UPDATED', handleUpdate);
+            socket.off('FUNDS_UPDATED', handleUpdate);
+            socket.off('MARKET_PRICE_UPDATED', handleUpdate);
+            socket.off('REFRESH_DATA', handleUpdate);
+        };
+    }, [fetchPortfolio]);
 
     if (loading || !portfolioData) {
         return (
-            <SafeAreaView style={[styles.safeArea, { justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.safeArea, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
                 <Loader visible={true} text="Calculating Portfolio P&L..." overlay={true} />
-            </SafeAreaView>
+            </View>
         );
     }
 
@@ -43,7 +67,7 @@ const PortfolioScreen = ({ navigation }) => {
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 8 : 0) }]}>
             
             {/* Header */}
             <View style={styles.header}>
@@ -57,9 +81,11 @@ const PortfolioScreen = ({ navigation }) => {
                     </View>
                 </View>
 
-                <TouchableOpacity style={styles.iconBtn} onPress={fetchPortfolio}>
-                    <Ionicons name="refresh" size={19} color="#38BDF8" />
-                </TouchableOpacity>
+                {/* Real-time WebSocket sync badge */}
+                <View style={styles.liveIndicator}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveText}>SYNCED</Text>
+                </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -139,7 +165,7 @@ const PortfolioScreen = ({ navigation }) => {
                 </View>
 
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 };
 
@@ -380,5 +406,28 @@ const styles = StyleSheet.create({
     stockPnlText: {
         fontSize: 12,
         fontWeight: '800',
+    },
+    liveIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.3)',
+    },
+    liveDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 4,
+        backgroundColor: '#10B981',
+    },
+    liveText: {
+        color: '#10B981',
+        fontSize: 11,
+        fontWeight: '800',
+        letterSpacing: 0.5,
     }
 });

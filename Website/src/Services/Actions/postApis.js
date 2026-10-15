@@ -161,7 +161,39 @@ export const requestKycAction = (userId) => {
   };
 };
 
-// 7. Sidebar Responsive Toggle Controls
+export const deleteUserAction = (userId) => {
+  return async () => {
+    try {
+      const res = await postApi('admin_users.php', {
+        action: 'delete_user',
+        user_id: userId,
+      });
+      return res;
+    } catch (error) {
+      console.error('[deleteUserAction] Error:', error);
+      throw error;
+    }
+  };
+};
+
+// 7. Order Return / Refund Action
+export const returnOrderAction = (orderId, userId) => {
+  return async () => {
+    try {
+      const res = await postApi('admin_orders.php', {
+        action: 'return_order',
+        order_id: orderId,
+        user_id: userId,
+      });
+      return res;
+    } catch (error) {
+      console.error('[returnOrderAction] Error:', error);
+      throw error;
+    }
+  };
+};
+
+// 8. Sidebar Responsive Toggle Controls
 export const toggleSidebarAction = () => ({ type: 'TOGGLE_SIDEBAR' });
 export const closeSidebarAction = () => ({ type: 'CLOSE_SIDEBAR' });
 export const openSidebarAction = () => ({ type: 'OPEN_SIDEBAR' });

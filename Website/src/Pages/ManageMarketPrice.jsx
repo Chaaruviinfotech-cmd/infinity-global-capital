@@ -6,6 +6,7 @@ import { updateMarketPriceAction } from '../Services/Actions/postApis';
 import Layout from '../Components/Layout';
 import Loader from '../Components/Loader';
 import ThemeToggle from '../Components/ThemeToggle';
+import socket from '../Services/socket';
 
 /**
  * 1:1 Replica of PHP admin manual market price control desk (backend/admin/manage_market_price.php)
@@ -84,6 +85,24 @@ const ManageMarketPrice = () => {
 
   useEffect(() => {
     loadStocks();
+
+    const handlePriceUpdate = (updatedStock) => {
+      if (!updatedStock || !updatedStock.symbol) return;
+      setStocksList((prev) => {
+        const idx = prev.findIndex((s) => s.symbol === updatedStock.symbol);
+        if (idx !== -1) {
+          const clone = [...prev];
+          clone[idx] = { ...clone[idx], ...updatedStock };
+          return clone;
+        }
+        return prev;
+      });
+    };
+
+    socket.on('MARKET_PRICE_UPDATED', handlePriceUpdate);
+    return () => {
+      socket.off('MARKET_PRICE_UPDATED', handlePriceUpdate);
+    };
   }, [loadStocks]);
 
   const handleSelectStock = (e) => {

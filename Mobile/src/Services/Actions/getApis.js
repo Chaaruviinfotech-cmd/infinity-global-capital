@@ -1,4 +1,5 @@
 import { getApi } from '../helper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const fetchDashboardAction = (userId) => {
     return async (dispatch) => {
@@ -8,6 +9,7 @@ export const fetchDashboardAction = (userId) => {
                 dispatch({ type: 'SET_DASHBOARD_DATA', payload: res.data });
                 if (res.data?.user) {
                     dispatch({ type: 'SET_USER', payload: res.data.user });
+                    AsyncStorage.setItem('user_session', JSON.stringify(res.data.user)).catch(() => {});
                 }
             }
             return res;

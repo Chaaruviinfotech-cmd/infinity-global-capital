@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrdersAction } from '../Services/Actions/getApis';
+import { returnOrderAction } from '../Services/Actions/postApis';
 import Layout from '../Components/Layout';
 import DataTable from '../Components/DataTable';
 import Loader from '../Components/Loader';
 import ThemeToggle from '../Components/ThemeToggle';
+import socket from '../Services/socket';
 
 /**
  * 1:1 Replica of PHP admin OMS (backend/admin/orders.php)
  * Featuring Trade Orders Book converted to DataTable with search, sort, pagination,
- * and Actions/getApis data fetching matching mobile app architecture.
+ * real-time sync, and Order Return / Refund capabilities with instant wallet credit.
  */
 const Orders = () => {
   const dispatch = useDispatch();
@@ -17,6 +19,8 @@ const Orders = () => {
 
   const [loading, setLoading] = useState(!ordersData);
   const [orders, setOrders] = useState(ordersData || []);
+  const [feedback, setFeedback] = useState({ type: '', message: '' });
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   const loadOrders = React.useCallback(async () => {
     try {
@@ -33,7 +37,73 @@ const Orders = () => {
 
   useEffect(() => {
     loadOrders();
+
+    const handleOrderEvent = (order) => {
+      if (!order) return;
+      setOrders((prev) => {
+        const orderId = order.id || order.order_id;
+        const index = prev.findIndex((o) => (o.id === orderId || o.order_id === orderId));
+        if (index !== -1) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...order, status: order.status };
+          return updated;
+        }
+        return [order, ...prev];
+      });
+    };
+
+    const handleRefresh = (data) => {
+      if (!data || data.target === 'orders' || data.target === 'all') {
+        loadOrders();
+      }
+    };
+
+    socket.on('ORDER_PLACED', handleOrderEvent);
+    socket.on('ORDER_UPDATED', handleOrderEvent);
+    socket.on('REFRESH_DATA', handleRefresh);
+
+    return () => {
+      socket.off('ORDER_PLACED', handleOrderEvent);
+      socket.off('ORDER_UPDATED', handleOrderEvent);
+      socket.off('REFRESH_DATA', handleRefresh);
+    };
   }, [loadOrders]);
+
+  const handleReturnOrder = async (order) => {
+    const orderId = order.id || order.order_id;
+    const uid = order.user_id;
+    const totalVal = Number(order.total_amount || (order.quantity * order.price) || 0);
+    const amountFormatted = totalVal.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    const confirmMsg = `Are you sure you want to RETURN Order #ORD-${orderId}?\n\n• Stock: ${order.stock_symbol} (${order.quantity} Shares)\n• Refund Amount: ₹${amountFormatted}\n\nThis amount will be refunded directly into the user's wallet balance and shares will be removed from their portfolio.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setActionLoadingId(orderId);
+    setFeedback({ type: '', message: '' });
+
+    try {
+      const res = await dispatch(returnOrderAction(orderId, uid));
+      if (res && res.success) {
+        setFeedback({
+          type: 'success',
+          message: res.message || `Order #ORD-${orderId} has been successfully returned and ₹${amountFormatted} refunded to wallet!`
+        });
+        loadOrders();
+      } else {
+        setFeedback({
+          type: 'danger',
+          message: res?.message || 'Failed to return order.'
+        });
+      }
+    } catch (err) {
+      setFeedback({
+        type: 'danger',
+        message: err.message || 'Error processing order return.'
+      });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   if (loading && orders.length === 0) {
     return <Loader text="Loading Order Management System Book & Trades..." />;
@@ -93,11 +163,22 @@ const Orders = () => {
       key: 'status',
       label: 'Status',
       sortable: true,
-      render: (o) => (
-        <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-          {o.status || 'Executed'}
-        </span>
-      ),
+      render: (o) => {
+        const st = String(o.status || '').toUpperCase();
+        const isReturned = st === 'RETURNED' || st === 'CANCELLED';
+        if (isReturned) {
+          return (
+            <span className="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+              <i className="bi bi-arrow-return-left me-1"></i>Returned
+            </span>
+          );
+        }
+        return (
+          <span className="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+            <i className="bi bi-check-circle me-1"></i>{o.status || 'Executed'}
+          </span>
+        );
+      },
     },
     {
       key: 'full_name',
@@ -141,6 +222,52 @@ const Orders = () => {
         );
       },
     },
+    {
+      key: 'actions',
+      label: 'Action',
+      sortable: false,
+      headerClassName: 'text-center pe-4',
+      render: (o) => {
+        const st = String(o.status || '').toUpperCase();
+        const isReturned = st === 'RETURNED' || st === 'CANCELLED';
+        const isLoading = actionLoadingId === (o.id || o.order_id);
+
+        if (isReturned) {
+          return (
+            <div className="text-center pe-3">
+              <span className="badge bg-secondary-subtle text-secondary px-2 py-1 small border">
+                <i className="bi bi-lock-fill me-1"></i>Refunded
+              </span>
+            </div>
+          );
+        }
+
+        return (
+          <div className="text-center pe-3">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1 px-2 py-1 shadow-sm"
+              style={{ fontSize: '0.8rem', borderRadius: '6px' }}
+              onClick={() => handleReturnOrder(o)}
+              disabled={isLoading}
+              title="Return this order and refund total amount to user wallet"
+            >
+              {isLoading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                  <span>Refunding...</span>
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-arrow-return-left"></i>
+                  <span>Return Order</span>
+                </>
+              )}
+            </button>
+          </div>
+        );
+      },
+    },
   ];
 
   return (
@@ -173,6 +300,17 @@ const Orders = () => {
             </p>
           </div>
         </div>
+
+        {/* Action Feedback Alert */}
+        {feedback.message && (
+          <div className={`alert alert-${feedback.type} alert-dismissible fade show rounded-4 shadow-sm mb-4 border`} role="alert">
+            <div className="d-flex align-items-center gap-2">
+              <i className={`bi ${feedback.type === 'success' ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-danger'} fs-5`}></i>
+              <div className="fw-medium">{feedback.message}</div>
+            </div>
+            <button type="button" className="btn-close" onClick={() => setFeedback({ type: '', message: '' })} aria-label="Close"></button>
+          </div>
+        )}
 
         {/* Trade Orders Book Card converted to DataTable */}
         <div

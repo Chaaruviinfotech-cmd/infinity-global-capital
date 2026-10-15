@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platform, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -7,6 +7,8 @@ import { fetchFundsAction } from '../Services/Actions/getApis';
 import { manageFundsAction, sendStatementAction } from '../Services/Actions/postApis';
 import Loader from '../Components/Loader';
 import Alert from '../Components/Alert';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import socket from '../Services/socket';
 
 const FundsScreen = ({ navigation }) => {
     const insets = useSafeAreaInsets();
@@ -76,20 +78,69 @@ const FundsScreen = ({ navigation }) => {
         }
     };
 
-    useEffect(() => {
-        fetchFunds();
-    }, []);
+    const userRef = React.useRef(user);
+    userRef.current = user;
 
-    const fetchFunds = async () => {
+    const fetchFunds = useCallback(async () => {
         try {
-            const userId = user?.id || 1;
+            const userId = userRef.current?.id || 1;
             await dispatch(fetchFundsAction(userId));
         } catch(e) {
-            console.error(e);
+            console.error('Error fetching funds:', e);
         } finally {
             setLoading(false);
         }
-    };
+    }, [dispatch]);
+
+    useEffect(() => {
+        fetchFunds();
+
+        const handleFundsUpdate = (fData) => {
+            const currentUid = userRef.current?.id || 1;
+            if (!fData || fData.user_id == currentUid) {
+                fetchFunds();
+            }
+        };
+
+        const handleKycUpdate = (kData) => {
+            const currentUid = userRef.current?.id || 1;
+            if (!kData || String(kData.user_id) === String(currentUid)) {
+                if (kData) {
+                    const isApproved = Number(kData.is_kyc_verified) === 1 || kData.kyc_status === 'Approved';
+                    const currentUser = userRef.current;
+                    const updatedUser = {
+                        ...currentUser,
+                        is_kyc_verified: isApproved ? 1 : 0,
+                        kyc_status: kData.kyc_status || (isApproved ? 'Approved' : currentUser?.kyc_status),
+                        kyc_requested: Number(kData.kyc_requested) || 0
+                    };
+                    dispatch({ type: 'SET_USER', payload: updatedUser });
+                    AsyncStorage.setItem('user_session', JSON.stringify(updatedUser)).catch(() => {});
+                }
+                fetchFunds();
+            }
+        };
+
+        const handleRefresh = (data) => {
+            if (!data || data.target === 'funds' || data.target === 'all') {
+                fetchFunds();
+            }
+        };
+
+        socket.on('FUNDS_UPDATED', handleFundsUpdate);
+        socket.on('KYC_STATUS_UPDATED', handleKycUpdate);
+        socket.on('ORDER_PLACED', handleFundsUpdate);
+        socket.on('ORDER_UPDATED', handleFundsUpdate);
+        socket.on('REFRESH_DATA', handleRefresh);
+
+        return () => {
+            socket.off('FUNDS_UPDATED', handleFundsUpdate);
+            socket.off('KYC_STATUS_UPDATED', handleKycUpdate);
+            socket.off('ORDER_PLACED', handleFundsUpdate);
+            socket.off('ORDER_UPDATED', handleFundsUpdate);
+            socket.off('REFRESH_DATA', handleRefresh);
+        };
+    }, [fetchFunds, dispatch]);
 
     const handleTransaction = async (type) => {
         if (!isKycVerified) {
@@ -145,9 +196,7 @@ const FundsScreen = ({ navigation }) => {
         setAmountInput((current + addVal).toString());
     };
 
-    const safeTopPadding = Platform.OS === 'android' 
-        ? Math.max(StatusBar.currentHeight || 24, insets.top) + 10 
-        : Math.max(insets.top, 14);
+    const safeTopPadding = Math.max(insets.top, Platform.OS === 'android' ? 10 : 14);
 
     if (loading || !fundsData) {
         return (
@@ -159,7 +208,7 @@ const FundsScreen = ({ navigation }) => {
 
     return (
         <View style={[styles.mainContainer, { paddingTop: safeTopPadding }]}>
-            <StatusBar barStyle="light-content" backgroundColor="#090E1A" translucent />
+            <StatusBar barStyle="light-content" backgroundColor="#0A0E1A" translucent={false} />
 
             <Loader visible={actionLoading || sendingStatement} text={sendingStatement ? "Dispatching Official Statement..." : "Processing Settlement..."} overlay={true} />
             <Alert 
@@ -185,9 +234,10 @@ const FundsScreen = ({ navigation }) => {
                         <Text style={styles.headerSubtitle}>Bank Connected · Instant Settlement</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.refreshBtn} onPress={fetchFunds}>
-                    <Ionicons name="refresh" size={19} color="#38BDF8" />
-                </TouchableOpacity>
+                <View style={styles.liveIndicator}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.liveText}>SYNCED</Text>
+                </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -299,7 +349,7 @@ const FundsScreen = ({ navigation }) => {
 
                 {/* Bank Statement Section Header */}
                 <View style={styles.sectionHeader}>
-                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6 , flex : 0.7}}>
                         <Ionicons name="journal-outline" size={18} color="#38BDF8" />
                         <Text style={styles.sectionTitle}>Bank Statement & Passbook</Text>
                     </View>
@@ -824,4 +874,15 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         color: '#0F172A',
     },
+    liveIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.3)',
+    }
 });

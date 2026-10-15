@@ -6,6 +6,7 @@ import Layout from '../Components/Layout';
 import DataTable from '../Components/DataTable';
 import Loader from '../Components/Loader';
 import ThemeToggle from '../Components/ThemeToggle';
+import socket from '../Services/socket';
 
 /**
  * 1:1 Replica of PHP admin funds ledger (backend/admin/funds_ledger.php)
@@ -51,6 +52,20 @@ const FundsLedger = () => {
 
   useEffect(() => {
     loadLedger();
+
+    const handleFundsUpdate = () => {
+      loadLedger();
+    };
+
+    socket.on('FUNDS_UPDATED', handleFundsUpdate);
+    socket.on('ORDER_PLACED', handleFundsUpdate);
+    socket.on('REFRESH_DATA', handleFundsUpdate);
+
+    return () => {
+      socket.off('FUNDS_UPDATED', handleFundsUpdate);
+      socket.off('ORDER_PLACED', handleFundsUpdate);
+      socket.off('REFRESH_DATA', handleFundsUpdate);
+    };
   }, [loadLedger]);
 
   if (loading && !data) {

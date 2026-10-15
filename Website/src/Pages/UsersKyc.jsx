@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchUsersKycAction } from '../Services/Actions/getApis';
-import { updateKycStatusAction, requestKycAction } from '../Services/Actions/postApis';
+import { updateKycStatusAction, requestKycAction, deleteUserAction } from '../Services/Actions/postApis';
 import Layout from '../Components/Layout';
 import DataTable from '../Components/DataTable';
 import Loader from '../Components/Loader';
 import ThemeToggle from '../Components/ThemeToggle';
+import socket from '../Services/socket';
 
 /**
  * 1:1 Replica of PHP admin users KYC desk (backend/admin/users.php)
@@ -39,6 +40,18 @@ const UsersKyc = () => {
 
   useEffect(() => {
     loadUsers();
+
+    const handleKycUpdate = () => {
+      loadUsers();
+    };
+
+    socket.on('KYC_STATUS_UPDATED', handleKycUpdate);
+    socket.on('REFRESH_DATA', handleKycUpdate);
+
+    return () => {
+      socket.off('KYC_STATUS_UPDATED', handleKycUpdate);
+      socket.off('REFRESH_DATA', handleKycUpdate);
+    };
   }, [loadUsers]);
 
   const handleKycAction = async (kycId, userId, actionType) => {
@@ -85,6 +98,33 @@ const UsersKyc = () => {
         setFeedback({
           type: 'danger',
           message: res?.message || 'Failed to send KYC request alert.',
+        });
+      }
+    } catch (err) {
+      setFeedback({ type: 'danger', message: err.message });
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    const confirmMsg = `⚠️ Are you sure you want to permanently DELETE User #UID-${String(userId).padStart(4, '0')}?\n\nThis will remove their account, KYC records, wallet, holdings, orders and will immediately LOG THEM OUT of the mobile app via WebSocket!`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setActionInProgress(`${userId}_delete`);
+    try {
+      const res = await dispatch(deleteUserAction(userId));
+      if (res && res.success) {
+        setFeedback({
+          type: 'success',
+          message: res.message || `User #UID-${String(userId).padStart(4, '0')} deleted successfully.`,
+        });
+        loadUsers();
+      } else {
+        setFeedback({
+          type: 'danger',
+          message: res?.message || 'Failed to delete user.',
         });
       }
     } catch (err) {
@@ -210,8 +250,10 @@ const UsersKyc = () => {
         const isRejecting = actionInProgress === `${u.user_id}_reject`;
         const isRequestingKyc = actionInProgress === `${u.user_id}_request_kyc`;
 
+        const isDeleting = actionInProgress === `${u.user_id}_delete`;
+
         return (
-          <div className="text-end pe-3">
+          <div className="text-end pe-3 d-flex align-items-center justify-content-end gap-2">
             {isPanBlank ? (
               // CASE 1: PAN is Blank -> Show "Request KYC" button
               <button
@@ -251,6 +293,19 @@ const UsersKyc = () => {
                 <i className="bi bi-check2-circle me-1"></i>Verified
               </span>
             )}
+
+            {/* DELETE USER BUTTON */}
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger px-2.5 py-1 d-inline-flex align-items-center gap-1"
+              style={{ borderRadius: '8px', fontSize: '12px' }}
+              disabled={isDeleting}
+              onClick={() => handleDeleteUser(u.user_id)}
+              title="Delete user account and trigger immediate WebSocket logout"
+            >
+              <i className="bi bi-trash-fill"></i>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
           </div>
         );
       },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
     View, 
     Text, 
@@ -25,6 +25,8 @@ import {
 } from '../Services/Actions/getApis';
 import { placeOrderAction } from '../Services/Actions/postApis';
 import Alert from '../Components/Alert';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import socket from '../Services/socket';
 
 const CATEGORIES = ['All', 'Banking', 'IT Tech', 'Automobile', 'Energy', 'Pharma'];
 
@@ -51,6 +53,7 @@ const WatchlistScreen = ({ navigation, route }) => {
     const [selectedStock, setSelectedStock] = useState(null);
     const [orderQty, setOrderQty] = useState('10');
     const [orderLoading, setOrderLoading] = useState(false);
+    const orderInFlightRef = useRef(false);
 
     // Custom Alert State
     const [alertVisible, setAlertVisible] = useState(false);
@@ -76,6 +79,10 @@ const WatchlistScreen = ({ navigation, route }) => {
     };
 
     const userId = user?.id || 1;
+    const watchlistDataRef = useRef(watchlistData);
+    watchlistDataRef.current = watchlistData;
+    const userRef = useRef(user);
+    userRef.current = user;
 
     const loadWatchlist = useCallback(async () => {
         try {
@@ -95,8 +102,65 @@ const WatchlistScreen = ({ navigation, route }) => {
 
     useEffect(() => {
         loadWatchlist();
+    }, [loadWatchlist]);
+
+    useEffect(() => {
         loadFunds();
-    }, [loadWatchlist, loadFunds]);
+    }, [loadFunds]);
+
+    useEffect(() => {
+        const handlePriceUpdate = (stockData) => {
+            if (!stockData || !stockData.symbol) return;
+            const currentList = watchlistDataRef.current;
+            if (Array.isArray(currentList)) {
+                const updated = currentList.map(stk => 
+                    stk.symbol === stockData.symbol ? { ...stk, ...stockData } : stk
+                );
+                dispatch({ type: 'SET_WATCHLIST_DATA', payload: updated });
+            }
+        };
+
+        const handleFundsUpdate = (fData) => {
+            if (!fData || fData.user_id == userId) {
+                loadFunds();
+            }
+        };
+
+        const handleKycUpdate = (kData) => {
+            if (!kData || String(kData.user_id) === String(userId)) {
+                if (kData) {
+                    const isApproved = Number(kData.is_kyc_verified) === 1 || kData.kyc_status === 'Approved';
+                    const currentUser = userRef.current;
+                    const updatedUser = {
+                        ...currentUser,
+                        is_kyc_verified: isApproved ? 1 : 0,
+                        kyc_status: kData.kyc_status || (isApproved ? 'Approved' : currentUser?.kyc_status),
+                        kyc_requested: Number(kData.kyc_requested) || 0
+                    };
+                    dispatch({ type: 'SET_USER', payload: updatedUser });
+                    AsyncStorage.setItem('user_session', JSON.stringify(updatedUser)).catch(() => {});
+                }
+            }
+        };
+
+        const handleRefresh = (data) => {
+            if (!data || data.target === 'markets' || data.target === 'all') {
+                loadWatchlist();
+            }
+        };
+
+        socket.on('MARKET_PRICE_UPDATED', handlePriceUpdate);
+        socket.on('FUNDS_UPDATED', handleFundsUpdate);
+        socket.on('KYC_STATUS_UPDATED', handleKycUpdate);
+        socket.on('REFRESH_DATA', handleRefresh);
+
+        return () => {
+            socket.off('MARKET_PRICE_UPDATED', handlePriceUpdate);
+            socket.off('FUNDS_UPDATED', handleFundsUpdate);
+            socket.off('KYC_STATUS_UPDATED', handleKycUpdate);
+            socket.off('REFRESH_DATA', handleRefresh);
+        };
+    }, [userId, loadFunds, loadWatchlist, dispatch]);
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -108,28 +172,9 @@ const WatchlistScreen = ({ navigation, route }) => {
         return Array.isArray(watchlistData) && watchlistData.length > 0 ? watchlistData : [];
     }, [watchlistData]);
 
-    // Check if routed with a pre-selected stock symbol
-    useEffect(() => {
-        if (route?.params?.selectedSymbol && stockList.length > 0) {
-            const found = stockList.find(s => s.symbol?.toUpperCase() === route.params.selectedSymbol.toUpperCase());
-            if (found) {
-                openTradeModal(found);
-            }
-        }
-    }, [route?.params?.selectedSymbol, stockList]);
-
-    const filteredStocks = stockList.filter(stock => {
-        const matchesSearch = !searchQuery || 
-            stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (stock.name && stock.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (stock.company_name && stock.company_name.toLowerCase().includes(searchQuery.toLowerCase()));
-
-        return matchesSearch;
-    });
-
     const isKycVerified = user?.is_kyc_verified == 1 || user?.kyc_status === 'Approved';
 
-    const openTradeModal = (stk) => {
+    const openTradeModal = useCallback((stk) => {
         if (!isKycVerified) {
             showAlert(
                 'warning',
@@ -144,7 +189,26 @@ const WatchlistScreen = ({ navigation, route }) => {
         setSelectedStock(stk);
         setOrderQty('10');
         setTradeModalVisible(true);
-    };
+    }, [isKycVerified, navigation]);
+
+    // Check if routed with a pre-selected stock symbol
+    useEffect(() => {
+        if (route?.params?.selectedSymbol && stockList.length > 0) {
+            const found = stockList.find(s => s.symbol?.toUpperCase() === route.params.selectedSymbol.toUpperCase());
+            if (found) {
+                openTradeModal(found);
+            }
+        }
+    }, [route?.params?.selectedSymbol, stockList, openTradeModal]);
+
+    const filteredStocks = stockList.filter(stock => {
+        const matchesSearch = !searchQuery || 
+            stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (stock.name && stock.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (stock.company_name && stock.company_name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+        return matchesSearch;
+    });
 
     const handleQtyChange = (delta) => {
         const current = parseInt(orderQty, 10) || 0;
@@ -169,6 +233,12 @@ const WatchlistScreen = ({ navigation, route }) => {
     const marginShortfall = isMarginSufficient ? 0 : Number((totalCost - availableMargin).toFixed(2));
 
     const handlePlaceOrder = async () => {
+        // Immediate synchronous guard: blocks rapid double clicks instantly
+        if (orderInFlightRef.current || orderLoading) {
+            console.log('⚠️ [Order Guard] Blocked rapid double-tap submission.');
+            return;
+        }
+
         if (!selectedStock) return;
 
         if (!isKycVerified) {
@@ -206,7 +276,10 @@ const WatchlistScreen = ({ navigation, route }) => {
             return;
         }
 
+        // Lock in-flight submission synchronously
+        orderInFlightRef.current = true;
         setOrderLoading(true);
+
         try {
             const orderPayload = {
                 user_id: userId,
@@ -217,7 +290,6 @@ const WatchlistScreen = ({ navigation, route }) => {
             };
 
             const res = await dispatch(placeOrderAction(orderPayload));
-            setOrderLoading(false);
 
             if (res && res.success) {
                 setTradeModalVisible(false);
@@ -239,9 +311,14 @@ const WatchlistScreen = ({ navigation, route }) => {
                 showAlert('error', 'Order Failed', res?.message || 'Could not place order. Please try again.');
             }
         } catch (err) {
-            setOrderLoading(false);
             console.error('Place order error:', err);
             showAlert('error', 'Execution Error', 'Server error or network failure while processing order.');
+        } finally {
+            setOrderLoading(false);
+            // 1.2 second debounce to prevent spam taps
+            setTimeout(() => {
+                orderInFlightRef.current = false;
+            }, 1200);
         }
     };
 
@@ -600,11 +677,11 @@ const WatchlistScreen = ({ navigation, route }) => {
                                     style={[
                                         styles.placeOrderBtn,
                                         !isMarginSufficient && styles.placeOrderWarnBtn,
-                                        orderLoading && styles.placeOrderBtnDisabled
+                                        (orderLoading || orderInFlightRef.current) && styles.placeOrderBtnDisabled
                                     ]}
                                     activeOpacity={0.85}
                                     onPress={handlePlaceOrder}
-                                    disabled={orderLoading}
+                                    disabled={orderLoading || orderInFlightRef.current}
                                 >
                                     {orderLoading ? (
                                         <View style={styles.btnLoadingRow}>
